@@ -152,5 +152,7 @@ Deno.serve(async (req: Request) => {
     .join('\n')
   const text = (parts.length > 120 ? parts : `${parts}\nTeks halaman: ${visible}`).slice(0, 5000)
   if (text.replace(/\s/g, '').length < 60) return json({ error: 'no_content' }, 422)
+  // Tidak ada info toko maupun menu: kemungkinan halaman umum Grab (tautan bagikan membuka halaman beranda), jangan disimpan sebagai info toko.
+  if (facts.length === 0 && menu.length === 0) return json({ error: 'weak_page', title }, 422)
   return json({ ok: true, text, title, source, menuCount: menu.length })
 })

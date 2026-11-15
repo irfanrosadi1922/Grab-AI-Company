@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ExternalLink, Link2, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Notice, PageHeader, SearchInput } from '../components/ui'
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Notice, PageHeader, SearchInput, Textarea } from '../components/ui'
 import type { Tone } from '../components/ui'
 import { ConfirmDialog, Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
@@ -80,6 +80,7 @@ function Detail({ s, onClose }: { s: Store; onClose: () => void }) {
   const [link, setLink] = useState(s.publicUrl)
   const [linkErr, setLinkErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [paste, setPaste] = useState('')
   const [connect, setConnect] = useState(false)
   const [del, setDel] = useState(false)
   const t = useMemo(() => storeTotals(stores, entries.sales, entries.reviews, PERIOD).find((x) => x.store.id === s.id), [stores, entries, s.id])
@@ -153,6 +154,20 @@ function Detail({ s, onClose }: { s: Store; onClose: () => void }) {
                 </Button>
               )}
             </div>
+            <Field label="Tempel teks halaman (cara paling andal)" hint="Buka halaman toko Anda di browser, pilih semua teks (menu, harga, deskripsi), salin, lalu tempel di sini. Gambar tidak ikut terbaca.">
+              <Textarea value={paste} onChange={(e) => setPaste(e.target.value)} className="min-h-[88px] text-xs" maxLength={20000} />
+            </Field>
+            <Button
+              size="sm"
+              disabled={paste.trim().length < 80}
+              onClick={() => {
+                updateStore(s.id, { peekText: paste.trim().replace(/\s+\n/g, '\n').slice(0, 5000), peekAt: `${new Date().toLocaleString('id-ID')} (ditempel manual)` })
+                setPaste('')
+                toast('Teks halaman disimpan. Semua karyawan AI memakainya.', 'info')
+              }}
+            >
+              Simpan teks halaman
+            </Button>
             {s.peekText ? (
               <div className="rounded-ctl border border-line bg-canvas p-3">
                 <p className="mb-1 text-xs text-mute">Dibaca {s.peekAt}. Semua karyawan AI memakai ringkasan ini.</p>

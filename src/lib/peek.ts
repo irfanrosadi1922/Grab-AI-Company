@@ -22,6 +22,8 @@ export const peekErrorText = (e: unknown) => {
     case 'upstream':
     case 'redirect_blocked':
       return 'Halaman Grab menolak atau tidak bisa dibuka dari server. Coba tautan lain, atau isi data manual.'
+    case 'weak_page':
+      return 'Yang terbuka halaman umum Grab, bukan halaman toko Anda (tautan bagikan dari aplikasi biasanya begitu). Data menu dan harga dimuat lewat JavaScript, jadi tidak terbaca otomatis. Pakai kolom "Tempel teks halaman" di bawah.'
     case 'no_content':
       return 'Halaman terbuka tapi isinya tidak terbaca (kemungkinan dimuat lewat JavaScript). Isi data manual atau impor CSV.'
     case 'timeout':
