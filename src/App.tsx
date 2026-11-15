@@ -14,6 +14,7 @@ const Analytics = lazy(() => import('./pages/Analytics'))
 const Stores = lazy(() => import('./pages/Stores'))
 const Reports = lazy(() => import('./pages/Reports'))
 const Approvals = lazy(() => import('./pages/Approvals'))
+const Office = lazy(() => import('./pages/Office'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
 class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="stores" element={<Stores />} />
             <Route path="reports" element={<Reports />} />
             <Route path="approvals" element={<Approvals />} />
+            <Route path="office" element={<Office />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

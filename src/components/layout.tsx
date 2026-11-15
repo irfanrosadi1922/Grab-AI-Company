@@ -10,6 +10,7 @@ import {
   Megaphone,
   MoreHorizontal,
   Search,
+  Building2,
   Settings,
   ShieldCheck,
   Store,
@@ -39,6 +40,7 @@ export const NAV: NavItem[] = [
   { to: '/stores', label: 'Grab Stores', icon: Store },
   { to: '/reports', label: 'Reports', icon: FileText },
   { to: '/approvals', label: 'Approval Center', icon: ShieldCheck },
+  { to: '/office', label: 'Kantor 3D', icon: Building2 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
