@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Link2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ExternalLink, Link2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Notice, PageHeader, SearchInput } from '../components/ui'
 import type { Tone } from '../components/ui'
 import { ConfirmDialog, Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { rupiahShort } from '../lib/format'
 import { storeTotals } from '../lib/stats'
+import { isGrabUrl, peekErrorText, peekStore } from '../lib/peek'
 import type { ConnectionState, Store } from '../types'
 
 const connTone: Record<ConnectionState, Tone> = { 'Belum terhubung': 'neutral', 'Menunggu akses resmi': 'warn', Terhubung: 'brand' }
@@ -16,18 +17,21 @@ function AddStore({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState('')
   const [city, setCity] = useState('')
   const [mid, setMid] = useState('')
+  const [url, setUrl] = useState('')
   const [err, setErr] = useState<Record<string, string>>({})
   const submit = () => {
     const e: Record<string, string> = {}
     if (name.trim().length < 3) e.name = 'Nama toko minimal 3 karakter.'
     if (city.trim().length < 2) e.city = 'Isi kota.'
+    if (url.trim() && !isGrabUrl(url.trim())) e.url = 'Tautan harus https dari grab.com.'
     setErr(e)
     if (Object.keys(e).length) return
-    addStore({ name: name.trim(), city: city.trim(), merchantId: mid.trim() })
+    addStore({ name: name.trim(), city: city.trim(), merchantId: mid.trim(), publicUrl: url.trim() })
     toast('Toko ditambahkan.')
     setName('')
     setCity('')
     setMid('')
+    setUrl('')
     onClose()
   }
   return (
@@ -54,6 +58,9 @@ function AddStore({ open, onClose }: { open: boolean; onClose: () => void }) {
         <Field label="Merchant ID (opsional)" hint="Menyimpan ID tidak menghubungkan toko. Koneksi butuh akses resmi GrabMerchant.">
           <Input value={mid} onChange={(e) => setMid(e.target.value)} />
         </Field>
+        <Field label="Tautan GrabFood toko (opsional)" error={err.url} hint="Alamat halaman toko Anda di food.grab.com. Dipakai karyawan AI untuk melihat info publik toko.">
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://food.grab.com/id/..." inputMode="url" autoCapitalize="off" />
+        </Field>
       </div>
     </Modal>
   )
@@ -69,7 +76,10 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 }
 
 function Detail({ s, onClose }: { s: Store; onClose: () => void }) {
-  const { toggleStoreOpen, removeStore, stores, entries, toast } = useApp()
+  const { toggleStoreOpen, removeStore, updateStore, stores, entries, toast } = useApp()
+  const [link, setLink] = useState(s.publicUrl)
+  const [linkErr, setLinkErr] = useState('')
+  const [busy, setBusy] = useState(false)
   const [connect, setConnect] = useState(false)
   const [del, setDel] = useState(false)
   const t = useMemo(() => storeTotals(stores, entries.sales, entries.reviews, PERIOD).find((x) => x.store.id === s.id), [stores, entries, s.id])
@@ -99,6 +109,58 @@ function Detail({ s, onClose }: { s: Store; onClose: () => void }) {
             <Button size="sm" icon={Link2} onClick={() => setConnect(true)}>
               Hubungkan GrabMerchant
             </Button>
+          </div>
+          <div className="space-y-3 md:col-span-2">
+            <p className="text-xs font-semibold text-mute">Pantau lewat web (halaman publik toko)</p>
+            <p className="text-[13px] text-mute">
+              Selama koneksi resmi belum ada, karyawan AI bisa membaca halaman publik toko Anda di Grab (menu, rating, dan info yang tampil untuk pelanggan). Ini bukan data penjualan atau pesanan, dan tidak memakai akun Grab Anda.
+            </p>
+            <Field label="Tautan GrabFood toko" error={linkErr}>
+              <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://food.grab.com/id/..." inputMode="url" autoCapitalize="off" />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                icon={RefreshCw}
+                disabled={busy || !link.trim()}
+                onClick={async () => {
+                  const v = link.trim()
+                  if (!isGrabUrl(v)) return setLinkErr('Tautan harus https dari grab.com.')
+                  setLinkErr('')
+                  setBusy(true)
+                  try {
+                    const r = await peekStore(v)
+                    updateStore(s.id, { publicUrl: v, peekText: r.text, peekAt: new Date().toLocaleString('id-ID') })
+                    toast(r.menuCount > 0 ? `Info toko diperbarui (${r.menuCount} menu terbaca).` : 'Info toko diperbarui. Menu tidak terbaca, hanya teks halaman.', 'info')
+                  } catch (e) {
+                    setLinkErr(peekErrorText(e))
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+              >
+                {busy ? 'Membaca halaman...' : 'Perbarui info dari web'}
+              </Button>
+              {link.trim() && isGrabUrl(link.trim()) && (
+                <a href={link.trim()} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-line px-3 text-xs font-medium hover:bg-raised">
+                  <ExternalLink size={14} aria-hidden /> Buka di Grab
+                </a>
+              )}
+              {link.trim() !== s.publicUrl && (
+                <Button size="sm" onClick={() => (link.trim() && !isGrabUrl(link.trim()) ? setLinkErr('Tautan harus https dari grab.com.') : (updateStore(s.id, { publicUrl: link.trim() }), setLinkErr(''), toast('Tautan disimpan.')))}>
+                  Simpan tautan
+                </Button>
+              )}
+            </div>
+            {s.peekText ? (
+              <div className="rounded-ctl border border-line bg-canvas p-3">
+                <p className="mb-1 text-xs text-mute">Dibaca {s.peekAt}. Semua karyawan AI memakai ringkasan ini.</p>
+                <p className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs">{s.peekText}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-mute">Belum ada info yang dibaca.</p>
+            )}
           </div>
           <div className="md:col-span-2">
             <p className="mb-2 text-xs font-semibold text-mute">Performa {PERIOD} hari terakhir (dari data yang Anda catat)</p>
@@ -165,7 +227,7 @@ export default function Stores() {
           </Button>
         }
       />
-      <Notice>Belum ada toko yang terhubung ke GrabMerchant. Penjualan dicatat manual di Analytics.</Notice>
+      <Notice>Belum ada toko yang terhubung ke GrabMerchant. Penjualan dicatat manual atau diimpor dari CSV di Analytics. Info publik toko bisa dibaca lewat tautan GrabFood.</Notice>
       {stores.length > 0 && (
         <div className="max-w-md">
           <SearchInput value={q} onChange={setQ} placeholder="Cari toko" />

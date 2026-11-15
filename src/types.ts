@@ -73,6 +73,11 @@ export interface Store {
   open: boolean
   connection: ConnectionState
   lastSync: string | null
+  /** Tautan halaman publik toko di situs Grab (opsional). */
+  publicUrl: string
+  /** Ringkasan teks hasil membaca halaman publik. */
+  peekText: string
+  peekAt: string
 }
 
 export interface Asset {

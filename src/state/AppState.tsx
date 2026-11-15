@@ -4,6 +4,9 @@ import type { Approval, Asset, ChatMsg, Entries, EntryKind, EntryOf, EmployeeId,
 import { newId, nowStamp } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { fingerprints, loadRemote, saveRemote } from '../lib/remote'
+import { setAiBaseContext } from '../lib/ai'
+import { storeTotals } from '../lib/stats'
+import { rupiah } from '../lib/format'
 
 export interface Settings {
   ceoName: string
@@ -69,7 +72,8 @@ interface Ctx {
   addApproval: (a: Pick<Approval, 'title' | 'requestedBy' | 'category' | 'summary' | 'recommendation' | 'risk'>) => void
   decide: (id: string, decision: 'Approved' | 'Rejected', reason?: string) => void
   stores: Store[]
-  addStore: (s: Pick<Store, 'name' | 'city' | 'merchantId'>) => void
+  addStore: (s: Pick<Store, 'name' | 'city' | 'merchantId'> & Partial<Pick<Store, 'publicUrl'>>) => void
+  updateStore: (id: string, patch: Partial<Pick<Store, 'publicUrl' | 'peekText' | 'peekAt'>>) => void
   removeStore: (id: string) => void
   toggleStoreOpen: (id: string) => void
   entries: Entries
@@ -144,7 +148,7 @@ function load(): Persisted {
     return {
       tasks: p.tasks ?? [],
       approvals: p.approvals ?? [],
-      stores: p.stores ?? [],
+      stores: (p.stores ?? []).map((s) => ({ publicUrl: '', peekText: '', peekAt: '', ...s })),
       assets: p.assets ?? [],
       entries: { ...EMPTY_ENTRIES, ...(p.entries ?? {}) },
       plans: p.plans ?? [],
@@ -212,6 +216,22 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       cancelled = true
     }
   }, [userId])
+
+  // Semua karyawan AI diberi gambaran toko CEO: data yang dicatat sendiri dan ringkasan halaman publik toko.
+  useEffect(() => {
+    if (stores.length === 0) return setAiBaseContext('')
+    const totals = storeTotals(stores, entries.sales, entries.reviews, 30)
+    const lines = stores.slice(0, 5).map((s) => {
+      const t = totals.find((x) => x.store.id === s.id)
+      const rec =
+        t && (t.sales > 0 || t.reviewCount > 0)
+          ? `Catatan CEO 30 hari: penjualan ${rupiah(t.sales)}, ${t.orders} pesanan${t.avgRating != null ? `, rating rata-rata ${t.avgRating.toFixed(1)} dari ${t.reviewCount} ulasan` : ''}.`
+          : 'Belum ada catatan penjualan.'
+      const web = s.peekText ? `\nInfo dari halaman publik Grab (dibaca ${s.peekAt}, bisa tidak lengkap):\n${s.peekText.slice(0, 1200)}` : ''
+      return `- ${s.name} (${s.city})${s.merchantId ? `, Merchant ID ${s.merchantId}` : ''}. ${rec}${web}`
+    })
+    setAiBaseContext(`Toko milik CEO:\n${lines.join('\n')}`)
+  }, [stores, entries.sales, entries.reviews])
 
   // Selalu berisi data terbaru, dibaca oleh penyimpanan yang berjalan di luar siklus render.
   const latest = useRef({ tasks, approvals, stores, assets, entries, plans, meetings, chats, settings })
@@ -331,9 +351,10 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
   const addStore: Ctx['addStore'] = useCallback((s) => {
     setStores((prev) => [
       ...prev,
-      { id: newId('S'), ...s, open: false, connection: 'Belum terhubung', lastSync: null },
+      { id: newId('S'), publicUrl: '', peekText: '', peekAt: '', ...s, open: false, connection: 'Belum terhubung', lastSync: null },
     ])
   }, [])
+  const updateStore: Ctx['updateStore'] = useCallback((id, patch) => setStores((p) => p.map((s) => (s.id === id ? { ...s, ...patch } : s))), [])
 
   // Menghapus toko juga menghapus penjualan dan ulasan milik toko itu agar tidak ada data yatim.
   const removeStore = useCallback((id: string) => {
@@ -414,6 +435,7 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       decide,
       stores,
       addStore,
+      updateStore,
       removeStore,
       toggleStoreOpen,
       entries,
@@ -452,6 +474,7 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       decide,
       stores,
       addStore,
+      updateStore,
       removeStore,
       toggleStoreOpen,
       entries,

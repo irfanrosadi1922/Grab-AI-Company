@@ -78,6 +78,9 @@ const toStore = (r: Row): Store => ({
   open: !!r.is_open,
   connection: r.connection,
   lastSync: r.last_sync ?? null,
+  publicUrl: r.public_url ?? '',
+  peekText: r.peek_text ?? '',
+  peekAt: r.peek_at ?? '',
 })
 const fromStore = (s: Store, userId: string): Row => ({
   id: s.id,
@@ -88,6 +91,9 @@ const fromStore = (s: Store, userId: string): Row => ({
   is_open: s.open,
   connection: s.connection,
   last_sync: s.lastSync,
+  public_url: s.publicUrl,
+  peek_text: s.peekText,
+  peek_at: s.peekAt,
 })
 
 const toAsset = (r: Row): Asset => ({

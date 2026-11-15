@@ -62,12 +62,19 @@ export interface AskOpts {
   maxTokens?: number
 }
 
+let baseContext = ''
+/** Konteks toko yang otomatis ikut di setiap pertanyaan ke karyawan AI. */
+export function setAiBaseContext(text: string) {
+  baseContext = text
+}
+
 export async function askEmployee(employee: string, messages: Msg[], opts: AskOpts = {}): Promise<string> {
+  const context = [baseContext, opts.context].filter(Boolean).join('\n\n') || undefined
   const d = await invoke({
     employee,
     messages,
     model: opts.model || undefined,
-    context: opts.context,
+    context,
     maxTokens: opts.maxTokens,
   })
   return String(d.reply)
