@@ -6,6 +6,8 @@ import { Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { EMPLOYEES, EMP } from '../data/employees'
 import type { EmployeeId, Priority } from '../types'
+import { aiErrorText, askEmployee } from '../lib/ai'
+import type { Msg } from '../lib/ai'
 import { StatusBadge } from '../components/ui'
 
 const stateTone = { Bekerja: 'brand', Siaga: 'warn', 'Dalam rapat': 'info', Nonaktif: 'neutral' } as const
@@ -90,41 +92,68 @@ export function AssignTaskModal({ open, onClose, initial }: { open: boolean; onC
 }
 
 function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => void }) {
-  const [msgs, setMsgs] = useState<{ from: 'ceo' | 'sys'; text: string }[]>([])
+  const { settings } = useApp()
+  const [msgs, setMsgs] = useState<{ from: 'ceo' | 'ai' | 'sys'; text: string }[]>([])
   const [text, setText] = useState('')
-  useEffect(() => setMsgs([]), [id])
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    setMsgs([])
+    setText('')
+    setBusy(false)
+  }, [id])
   if (!id) return null
   const e = EMP[id]
-  const send = () => {
+
+  const send = async () => {
     const t = text.trim()
-    if (!t) return
-    setMsgs((m) => [
-      ...m,
-      { from: 'ceo', text: t },
-      { from: 'sys', text: `${e.name} belum bisa membalas: model AI belum terhubung. Pesan ini tidak dikirim ke mana pun.` },
-    ])
+    if (!t || busy) return
+    const history: Msg[] = [
+      ...msgs.filter((m) => m.from !== 'sys').map((m): Msg => ({ role: m.from === 'ceo' ? 'user' : 'assistant', content: m.text })),
+      { role: 'user', content: t },
+    ]
+    setMsgs((m) => [...m, { from: 'ceo', text: t }])
     setText('')
+    setBusy(true)
+    try {
+      const reply = await askEmployee(id, history, settings.model)
+      setMsgs((m) => [...m, { from: 'ai', text: reply }])
+    } catch (err) {
+      setMsgs((m) => [...m, { from: 'sys', text: aiErrorText(err) }])
+    } finally {
+      setBusy(false)
+    }
   }
+
   return (
     <Modal open onClose={onClose} title={`Percakapan dengan ${e.name}`}>
-      <Notice>Antarmuka percakapan siap, tetapi balasan AI belum aktif karena backend dan penyedia model belum terhubung.</Notice>
-      <div className="mt-4 min-h-[160px] space-y-2">
-        {msgs.length === 0 && <p className="py-8 text-center text-[13px] text-mute">Belum ada pesan.</p>}
+      <Notice tone="info">
+        {e.name} menjawab lewat model AI, tetapi belum punya akses ke data toko nyata dan tidak bisa menjalankan tindakan. Pesan Anda dikirim ke {settings.provider}.
+      </Notice>
+      <div className="mt-4 min-h-[160px] space-y-2" aria-live="polite">
+        {msgs.length === 0 && <p className="py-8 text-center text-[13px] text-mute">Belum ada pesan. Tanyakan sesuatu pada {e.name}.</p>}
         {msgs.map((m, i) => (
           <div key={i} className={m.from === 'ceo' ? 'flex justify-end' : 'flex'}>
-            <p className={'max-w-[85%] rounded-xl px-3 py-2 text-[13px] ' + (m.from === 'ceo' ? 'bg-brand text-canvas' : 'bg-raised text-mute')}>{m.text}</p>
+            <p
+              className={
+                'max-w-[88%] whitespace-pre-wrap rounded-xl px-3 py-2 text-[13px] ' +
+                (m.from === 'ceo' ? 'bg-brand text-canvas' : m.from === 'ai' ? 'bg-raised text-ink' : 'border border-warn/30 text-mute')
+              }
+            >
+              {m.text}
+            </p>
           </div>
         ))}
+        {busy && <p className="text-xs text-mute">{e.name} sedang mengetik...</p>}
       </div>
       <form
         className="mt-4 flex gap-2"
         onSubmit={(ev) => {
           ev.preventDefault()
-          send()
+          void send()
         }}
       >
-        <Input value={text} onChange={(e2) => setText(e2.target.value)} placeholder={`Tulis pesan untuk ${e.name}`} aria-label="Pesan" />
-        <Button variant="primary" icon={Send} type="submit" aria-label="Kirim">
+        <Input value={text} onChange={(e2) => setText(e2.target.value)} placeholder={`Tulis pesan untuk ${e.name}`} aria-label="Pesan" disabled={busy} maxLength={1500} />
+        <Button variant="primary" icon={Send} type="submit" aria-label="Kirim" disabled={busy || !text.trim()}>
           <span className="hidden sm:inline">Kirim</span>
         </Button>
       </form>

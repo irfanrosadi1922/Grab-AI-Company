@@ -4,6 +4,8 @@ import type { Tone } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { useAuth } from '../state/Auth'
+import { aiErrorText, checkAi } from '../lib/ai'
+import type { AiStatus } from '../lib/ai'
 import { EMPLOYEES } from '../data/employees'
 import { cn } from '../lib/format'
 
@@ -41,6 +43,22 @@ export default function SettingsPage() {
   const [company, setCompany] = useState(settings.companyName)
   const [err, setErr] = useState<Record<string, string>>({})
   const [reset, setReset] = useState(false)
+  const [ai, setAi] = useState<AiStatus | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiErr, setAiErr] = useState('')
+
+  const testAi = async () => {
+    setAiBusy(true)
+    setAiErr('')
+    setAi(null)
+    try {
+      setAi(await checkAi())
+    } catch (e) {
+      setAiErr(aiErrorText(e))
+    } finally {
+      setAiBusy(false)
+    }
+  }
 
   const saveCeo = () => {
     const e: Record<string, string> = {}
@@ -145,17 +163,41 @@ export default function SettingsPage() {
 
             {sec === 'model' && (
               <div className="max-w-md space-y-4">
-                <Notice>Kunci API tidak boleh disimpan di browser. Kunci disimpan di sisi server (Supabase Edge Function secrets) saat backend dibuat.</Notice>
+                <Notice tone="info">
+                  Kunci API tidak disimpan di aplikasi. Kunci ada di secret Supabase (GROQ_API_KEY) dan dipakai lewat Edge Function ai-chat.
+                </Notice>
                 <Field label="Penyedia model">
                   <Select value={settings.provider} onChange={(e) => updateSettings({ provider: e.target.value })}>
                     <option>Groq</option>
-                    <option>Anthropic</option>
-                    <option>OpenAI</option>
                   </Select>
                 </Field>
-                <Field label="Nama model" hint="Dicatat sebagai preferensi, belum dipakai.">
-                  <Input value={settings.model} onChange={(e) => updateSettings({ model: e.target.value })} />
+                <Field label="Nama model" hint="Kosongkan untuk memakai model bawaan server.">
+                  <Input value={settings.model} onChange={(e) => updateSettings({ model: e.target.value.trim() })} placeholder="mis. llama-3.3-70b-versatile" />
                 </Field>
+                <Button onClick={() => void testAi()} disabled={aiBusy || !user}>
+                  {aiBusy ? 'Memeriksa...' : 'Cek koneksi AI'}
+                </Button>
+                {!user && <p className="text-xs text-mute">Masuk dengan akun untuk memeriksa koneksi.</p>}
+                {aiErr && <Notice>{aiErr}</Notice>}
+                {ai && !ai.configured && <Notice>Kunci Groq belum dipasang. Tambahkan secret GROQ_API_KEY di Supabase (Edge Functions → Secrets).</Notice>}
+                {ai && ai.configured && ai.valid === false && <Notice>Kunci terpasang tetapi ditolak Groq. Periksa kuncinya.</Notice>}
+                {ai && ai.valid && (
+                  <div className="space-y-2">
+                    <Badge tone="brand">Terhubung ke Groq</Badge>
+                    <p className="text-xs text-mute">Model bawaan server: {ai.model}. Ketuk untuk memakai model lain:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(ai.models ?? []).map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => updateSettings({ model: m })}
+                          className={cn('rounded-md border px-2 py-1 font-mono text-[11px]', settings.model === m ? 'border-brand text-brand' : 'border-line text-mute hover:text-ink')}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -24,6 +24,8 @@ body,
 
 /* Perilaku seperti aplikasi: tanpa zoom cubit, tanpa seleksi teks, tanpa menu tekan-lama */
 html {
+  overflow-x: hidden;
+  max-width: 100%;
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior: none;
@@ -45,8 +47,17 @@ select,
   user-select: text;
 }
 
+/* Item grid tidak boleh melebar melebihi layar karena isinya (penyebab utama geser kanan-kiri) */
+.grid > *,
+main section,
+main nav {
+  min-width: 0;
+}
+
 body {
   margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   background: rgb(var(--canvas));
   color: rgb(var(--ink));
   font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
