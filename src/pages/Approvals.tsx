@@ -1,20 +1,49 @@
 import { useState } from 'react'
-import { Check, X } from 'lucide-react'
+import { Check, Sparkles, X } from 'lucide-react'
 import { Avatar, Badge, Button, Card, EmptyState, Field, PageHeader, Tabs, Textarea } from '../components/ui'
 import type { Tone } from '../components/ui'
 import { ConfirmDialog, Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { EMP } from '../data/employees'
+import { aiErrorText, askEmployee } from '../lib/ai'
 import type { Approval } from '../types'
 
 const riskTone: Record<Approval['risk'], Tone> = { Rendah: 'brand', Sedang: 'warn', Tinggi: 'danger' }
 
 function Review({ a, onClose }: { a: Approval; onClose: () => void }) {
-  const { decide, toast } = useApp()
+  const { decide, toast, settings } = useApp()
+  const [analysis, setAnalysis] = useState('')
+  const [busy, setBusy] = useState(false)
   const [approve, setApprove] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
   const [err, setErr] = useState('')
+
+  const analyze = async () => {
+    setBusy(true)
+    try {
+      const text = await askEmployee(
+        'james',
+        [
+          {
+            role: 'user',
+            content:
+              'Tinjau permintaan persetujuan ini untuk CEO. Format: 1) Ringkasan satu kalimat. 2) Tiga hal yang perlu dicek atau risiko. 3) Satu pertanyaan yang sebaiknya diajukan sebelum memutuskan. Jangan memutuskan menyetujui atau menolak.',
+          },
+        ],
+        {
+          model: settings.model,
+          maxTokens: 450,
+          context: `Judul: ${a.title}\nDiajukan oleh: ${EMP[a.requestedBy].name}\nKategori: ${a.category}\nRisiko: ${a.risk}\nRingkasan: ${a.summary}\nRekomendasi pengaju: ${a.recommendation}`,
+        },
+      )
+      setAnalysis(text)
+    } catch (e) {
+      toast(aiErrorText(e), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const reject = () => {
     if (reason.trim().length < 5) return setErr('Tulis alasan penolakan (min. 5 karakter).')
@@ -66,6 +95,19 @@ function Review({ a, onClose }: { a: Approval; onClose: () => void }) {
             <p className="mb-1 text-xs font-semibold text-mute">Rekomendasi AI</p>
             <p className="text-[13px]">{a.recommendation}</p>
           </div>
+          {!a.decision && (
+            <div className="space-y-2">
+              <Button icon={Sparkles} onClick={() => void analyze()} disabled={busy}>
+                {busy ? 'James meninjau...' : 'Minta tinjauan AI'}
+              </Button>
+              {analysis && (
+                <div className="rounded-ctl border border-info/30 bg-info/5 p-3.5">
+                  <p className="mb-1 text-xs font-semibold text-mute">Tinjauan James (AI). Bukan keputusan; keputusan tetap di tangan Anda.</p>
+                  <p className="whitespace-pre-wrap text-[13px]">{analysis}</p>
+                </div>
+              )}
+            </div>
+          )}
           {a.decision && (
             <div className="text-[13px]">
               <Badge tone={a.decision === 'Approved' ? 'brand' : 'danger'}>{a.decision === 'Approved' ? 'Disetujui' : 'Ditolak'}</Badge>

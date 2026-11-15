@@ -22,6 +22,8 @@ export const aiErrorText = (e: unknown) => {
       return 'Kunci Groq belum dipasang di Supabase (secret GROQ_API_KEY).'
     case 'upstream':
       return `Groq menolak permintaan${e.message ? `: ${e.message}` : '.'} Cek nama model di Settings → Model AI.`
+    case 'bad_format':
+      return 'Jawaban AI tidak bisa dibaca. Coba lagi.'
     case 'timeout':
       return 'AI terlalu lama membalas. Coba lagi.'
     case 'network':
@@ -53,9 +55,33 @@ async function invoke(body: Record<string, unknown>): Promise<any> {
   return data
 }
 
-export async function askEmployee(employee: string, messages: Msg[], model?: string): Promise<string> {
-  const d = await invoke({ employee, messages, model: model || undefined })
+export interface AskOpts {
+  model?: string
+  /** Data halaman (agenda, detail persetujuan, dll). Dikirim sebagai konteks, bukan perintah. */
+  context?: string
+  maxTokens?: number
+}
+
+export async function askEmployee(employee: string, messages: Msg[], opts: AskOpts = {}): Promise<string> {
+  const d = await invoke({
+    employee,
+    messages,
+    model: opts.model || undefined,
+    context: opts.context,
+    maxTokens: opts.maxTokens,
+  })
   return String(d.reply)
+}
+
+/** Mengambil objek/array JSON pertama dari jawaban AI. */
+export function parseJson<T>(text: string): T {
+  const m = text.match(/[\[{][\s\S]*[\]}]/)
+  if (!m) throw new AiError('bad_format')
+  try {
+    return JSON.parse(m[0]) as T
+  } catch {
+    throw new AiError('bad_format')
+  }
 }
 
 export interface AiStatus {

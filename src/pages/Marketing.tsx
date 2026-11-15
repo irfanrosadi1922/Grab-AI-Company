@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import { CalendarPlus, Copy, Download, ImageDown, Save, Sparkles, Trash2 } from 'lucide-react'
-import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Notice, PageHeader, Select, Tabs } from '../components/ui'
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Notice, PageHeader, Select, Tabs, Textarea } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { cn, downloadBlob } from '../lib/format'
 import type { Asset } from '../types'
+import { AiError, aiErrorText, askEmployee, parseJson } from '../lib/ai'
 
 type Tab = 'studio' | 'caption' | 'plan' | 'library'
 
@@ -96,7 +97,10 @@ function svgString(el: SVGSVGElement | null) {
 }
 
 function Studio() {
-  const { addAsset, toast } = useApp()
+  const { addAsset, toast, settings } = useApp()
+  const [brief, setBrief] = useState('')
+  const [briefErr, setBriefErr] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
   const [fmt, setFmt] = useState('poster')
   const [tpl, setTpl] = useState('bold')
   const [headline, setHeadline] = useState(TEMPLATES[0].headline)
@@ -117,6 +121,39 @@ function Studio() {
     setCta(t.cta)
     setErr('')
     toast('Teks disusun dari template. Anda bisa mengubahnya.', 'info')
+  }
+
+  const writeAi = async () => {
+    if (brief.trim().length < 5) return setBriefErr('Tulis brief minimal 5 karakter.')
+    setBriefErr('')
+    setAiBusy(true)
+    try {
+      const label = FORMATS.find((x) => x.id === fmt)?.label ?? fmt
+      const text = await askEmployee(
+        'olivia',
+        [
+          {
+            role: 'user',
+            content:
+              `Tulis teks promosi singkat untuk materi: ${label}.\nBrief: ${brief.trim()}\n` +
+              'Balas HANYA JSON valid: {"headline":"maks 40 karakter","sub":"maks 50 karakter","cta":"maks 25 karakter"}. ' +
+              'Jangan mengarang harga, diskon, atau klaim yang tidak ada di brief.',
+          },
+        ],
+        { model: settings.model, maxTokens: 200 },
+      )
+      const j = parseJson<{ headline?: string; sub?: string; cta?: string }>(text)
+      if (!j.headline) throw new AiError('bad_format')
+      setHeadline(String(j.headline).slice(0, 60))
+      setSub(String(j.sub ?? '').slice(0, 60))
+      setCta(String(j.cta ?? cta).slice(0, 30))
+      setErr('')
+      toast('Teks ditulis Olivia. Periksa sebelum dipakai.', 'info')
+    } catch (e) {
+      toast(aiErrorText(e), 'error')
+    } finally {
+      setAiBusy(false)
+    }
   }
 
   const valid = () => {
@@ -221,12 +258,18 @@ function Studio() {
             <Art fmt={fmt} tpl={tpl} headline={headline} sub={sub} cta={cta} accent={accent} light={light} />
           </div>
         </div>
-        <p className="border-t border-line px-4 py-2.5 text-xs text-mute">Generate menyusun teks dari template. Pembuatan gambar oleh AI belum aktif.</p>
+        <p className="border-t border-line px-4 py-2.5 text-xs text-mute">Generate menyusun teks dari template; Tulis dengan AI memakai Olivia. Pembuatan gambar oleh AI belum ada.</p>
       </Card>
 
       <Card className="order-3">
         <CardHeader title="Pengaturan desain" />
         <div className="space-y-4 p-4">
+          <Field label="Brief untuk AI" error={briefErr} hint="Ceritakan promo atau menu yang ingin diiklankan.">
+            <Textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={400} className="min-h-[72px]" />
+          </Field>
+          <Button icon={Sparkles} onClick={() => void writeAi()} disabled={aiBusy} className="w-full">
+            {aiBusy ? 'Olivia menulis...' : 'Tulis dengan AI'}
+          </Button>
           <Field label="Judul" error={err}>
             <Input value={headline} maxLength={60} onChange={(e) => setHeadline(e.target.value)} />
           </Field>
@@ -270,6 +313,37 @@ function Caption() {
   const [goal, setGoal] = useState('promo')
   const [out, setOut] = useState<string[]>([])
   const [err, setErr] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const { settings } = useApp()
+
+  const makeAi = async () => {
+    if (dish.trim().length < 2) return setErr('Isi nama menu atau promo.')
+    setErr('')
+    setAiBusy(true)
+    try {
+      const text = await askEmployee(
+        'olivia',
+        [
+          {
+            role: 'user',
+            content:
+              `Tulis 3 caption media sosial untuk: ${dish.trim()}. Nada: ${tone}. Tujuan: ${goal}.\n` +
+              'Balas HANYA array JSON berisi 3 string, masing-masing maks 180 karakter. Jangan mengarang harga, diskon, atau klaim kesehatan.',
+          },
+        ],
+        { model: settings.model, maxTokens: 400 },
+      )
+      const arr = parseJson<unknown>(text)
+      if (!Array.isArray(arr)) throw new AiError('bad_format')
+      const caps = arr.map((x) => String(x).trim()).filter(Boolean).slice(0, 3)
+      if (caps.length === 0) throw new AiError('bad_format')
+      setOut(caps)
+    } catch (e) {
+      toast(aiErrorText(e), 'error')
+    } finally {
+      setAiBusy(false)
+    }
+  }
 
   const make = () => {
     if (dish.trim().length < 2) return setErr('Isi nama menu atau promo.')
@@ -306,10 +380,13 @@ function Caption() {
               <option value="ulasan">Terima kasih</option>
             </Select>
           </Field>
-          <Button variant="primary" icon={Sparkles} onClick={make} className="w-full">
-            Generate
+          <Button variant="primary" icon={Sparkles} onClick={() => void makeAi()} disabled={aiBusy} className="w-full">
+            {aiBusy ? 'Olivia menulis...' : 'Generate dengan AI'}
           </Button>
-          <p className="text-xs text-mute">Dibuat dari template teks, belum memakai model AI.</p>
+          <Button icon={Sparkles} onClick={make} className="w-full">
+            Dari template (tanpa AI)
+          </Button>
+          <p className="text-xs text-mute">Mode AI butuh login dan kunci Groq terpasang. Mode template selalu tersedia.</p>
         </div>
       </Card>
       <Card>
@@ -475,7 +552,7 @@ export default function Marketing() {
   return (
     <div className="space-y-4">
       <PageHeader title="Marketing Studio" desc="Buat materi promosi, tulis caption, dan atur jadwal konten." />
-      <Notice tone="info">Desain dibuat dari template dan diekspor sebagai SVG atau PNG. Pembuatan gambar dan teks oleh AI belum terhubung.</Notice>
+      <Notice tone="info">Desain dibuat dari template dan diekspor sebagai SVG atau PNG. Teks dan caption bisa ditulis AI (Olivia). Pembuatan gambar oleh AI belum ada.</Notice>
       <Tabs<Tab>
         value={tab}
         onChange={setTab}

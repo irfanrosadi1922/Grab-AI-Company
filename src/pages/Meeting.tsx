@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ClipboardPlus, Download, Mic, MicOff, PhoneOff, Play, Plus, Send, Square, Video, VideoOff } from 'lucide-react'
+import { ClipboardPlus, Download, Mic, MicOff, PhoneOff, Play, Plus, Send, Sparkles, Square, Video, VideoOff } from 'lucide-react'
 import { Avatar, Badge, Button, Card, DemoTag, EmptyState, Input, Notice, PageHeader, Select, Tabs, Textarea } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
 import { AssignTaskModal } from './Employees'
 import { EMP } from '../data/employees'
 import { cn, downloadBlob } from '../lib/format'
 import { useApp } from '../state/AppState'
+import { aiErrorText, askEmployee } from '../lib/ai'
+import type { Msg } from '../lib/ai'
 import type { EmployeeId } from '../types'
 
 type MeetingType = 'board' | 'private' | 'department' | 'strategy' | 'emergency'
@@ -66,7 +68,9 @@ export default function Meeting() {
   const [leave, setLeave] = useState(false)
   const [assign, setAssign] = useState(false)
 
-  const [chat, setChat] = useState<{ who: 'CEO'; text: string }[]>([])
+  const [chat, setChat] = useState<{ who: 'CEO' | EmployeeId; text: string }[]>([])
+  const [busy, setBusy] = useState(false)
+  const [sumBusy, setSumBusy] = useState(false)
   const [chatText, setChatText] = useState('')
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [extraAgenda, setExtraAgenda] = useState<string[]>([])
@@ -92,11 +96,70 @@ export default function Meeting() {
     return () => clearInterval(t)
   }, [live])
 
-  const sendChat = () => {
+  const meetingContext = () =>
+    `Jenis rapat: ${cfg.label}. Moderator: James. Peserta: ${people.map((p) => `${EMP[p].name} (${EMP[p].role})`).join(', ')}.\n` +
+    `Agenda: ${agenda.join('; ')}.\n` +
+    `Keputusan sejauh ini: ${decisions.length ? decisions.map((d) => d.text).join('; ') : 'belum ada'}.`
+
+  // James (moderator) selalu menjawab; pembicara terpilih ikut menjawab jika berbeda.
+  const sendChat = async () => {
     const t = chatText.trim()
-    if (!t) return
-    setChat((c) => [...c, { who: 'CEO', text: t }])
+    if (!t || busy) return
+    const responders = Array.from(new Set<EmployeeId>(['james', ...(people.includes(speaker) ? [speaker] : [])])).filter(
+      (id) => settings.employeeEnabled[id],
+    )
+    if (responders.length === 0) return toast('Karyawan yang dipilih sedang dinonaktifkan di Settings.', 'error')
+
+    let thread: { who: 'CEO' | EmployeeId; text: string }[] = [...chat, { who: 'CEO', text: t }]
+    setChat(thread)
     setChatText('')
+    setBusy(true)
+    try {
+      for (const r of responders) {
+        const history: Msg[] = thread.map((m) =>
+          m.who === 'CEO'
+            ? { role: 'user', content: m.text }
+            : m.who === r
+              ? { role: 'assistant', content: m.text }
+              : { role: 'user', content: `[${EMP[m.who].name}, peserta lain]: ${m.text}` },
+        )
+        const role =
+          r === 'james'
+            ? 'Kamu bertindak sebagai moderator rapat: ringkas, arahkan pembahasan, dan tutup dengan tindak lanjut jika perlu.'
+            : 'Kamu peserta rapat: jawab dari bidangmu saja dan singkat.'
+        const reply = await askEmployee(r, history, { model: settings.model, context: `${meetingContext()}\n${role}`, maxTokens: 350 })
+        thread = [...thread, { who: r, text: reply }]
+        setChat(thread)
+        setSpeaker(r)
+      }
+    } catch (e) {
+      toast(aiErrorText(e), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const summarize = async () => {
+    const lines = chat.map((m) => `${m.who === 'CEO' ? 'CEO' : EMP[m.who].name}: ${m.text}`).join('\n')
+    if (!lines && decisions.length === 0 && !minutes.trim()) return toast('Belum ada chat, keputusan, atau catatan untuk diringkas.', 'error')
+    setSumBusy(true)
+    try {
+      const text = await askEmployee(
+        'james',
+        [{ role: 'user', content: 'Tulis notulen rapat ringkas: poin pembahasan, keputusan, dan tindak lanjut (siapa mengerjakan apa). Jangan menambah hal yang tidak ada di bahan.' }],
+        {
+          model: settings.model,
+          maxTokens: 600,
+          context: `${meetingContext()}\nChat rapat:\n${lines.slice(-1200)}\nCatatan CEO: ${minutes.slice(0, 500)}`,
+        },
+      )
+      setMinutes((m) => (m.trim() ? `${m.trim()}\n\n--- Ringkasan AI ---\n${text}` : text))
+      toast('Ringkasan ditambahkan ke notulen. Periksa sebelum diunduh.', 'info')
+    } catch (e) {
+      toast(aiErrorText(e), 'error')
+    } finally {
+      setSumBusy(false)
+    }
   }
 
   const addDecision = () => {
@@ -132,7 +195,7 @@ export default function Meeting() {
 
       <Notice>
         Suara dua arah, transkrip langsung, dan avatar interaktif belum aktif. Semuanya butuh backend dan layanan suara
-        ({settings.voiceProvider}) yang belum terhubung. Yang berfungsi sekarang: agenda, chat, notulen, log keputusan, dan penugasan.
+        ({settings.voiceProvider}) yang belum terhubung. Yang berfungsi sekarang: agenda, chat tertulis dengan AI (James dan pembicara terpilih menjawab), ringkasan notulen oleh AI, log keputusan, dan penugasan.
       </Notice>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_380px]">
@@ -274,22 +337,33 @@ export default function Meeting() {
             {panel === 'chat' && (
               <div className="flex h-full flex-col">
                 <div className="flex-1 space-y-2">
-                  {chat.length === 0 && <EmptyState title="Belum ada pesan" desc="Pesan hanya tersimpan selama halaman ini terbuka." />}
-                  {chat.map((m, i) => (
-                    <p key={i} className="ml-auto w-fit max-w-[85%] rounded-xl bg-brand px-3 py-2 text-[13px] text-canvas">
-                      {m.text}
-                    </p>
-                  ))}
+                  {chat.length === 0 && <EmptyState title="Belum ada pesan" desc="James menjawab sebagai moderator. Pilih peserta lain di panggung agar ikut menjawab. Pesan hilang saat halaman ditutup." />}
+                  {chat.map((m, i) =>
+                    m.who === 'CEO' ? (
+                      <p key={i} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-xl bg-brand px-3 py-2 text-[13px] text-canvas">
+                        {m.text}
+                      </p>
+                    ) : (
+                      <div key={i} className="flex max-w-[92%] gap-2">
+                        <Avatar id={m.who} size={26} />
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold text-mute">{EMP[m.who].name}</p>
+                          <p className="whitespace-pre-wrap rounded-xl bg-raised px-3 py-2 text-[13px]">{m.text}</p>
+                        </div>
+                      </div>
+                    ),
+                  )}
+                  {busy && <p className="text-xs text-mute">Peserta sedang mengetik...</p>}
                 </div>
                 <form
                   className="mt-3 flex gap-2"
                   onSubmit={(e) => {
                     e.preventDefault()
-                    sendChat()
+                    void sendChat()
                   }}
                 >
-                  <Input value={chatText} onChange={(e) => setChatText(e.target.value)} placeholder="Tulis pesan" aria-label="Pesan rapat" />
-                  <Button variant="primary" type="submit" icon={Send} aria-label="Kirim" />
+                  <Input value={chatText} onChange={(e) => setChatText(e.target.value)} placeholder="Tulis pesan" aria-label="Pesan rapat" disabled={busy} maxLength={1500} />
+                  <Button variant="primary" type="submit" icon={Send} aria-label="Kirim" disabled={busy || !chatText.trim()} />
                 </form>
               </div>
             )}
@@ -316,9 +390,14 @@ export default function Meeting() {
             {panel === 'minutes' && (
               <div className="space-y-3">
                 <Textarea value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Catat poin penting rapat" className="min-h-[200px]" aria-label="Notulen" />
-                <Button icon={Download} onClick={exportMinutes}>
-                  Unduh notulen (.txt)
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button icon={Sparkles} onClick={() => void summarize()} disabled={sumBusy}>
+                    {sumBusy ? 'Meringkas...' : 'Ringkas dengan AI'}
+                  </Button>
+                  <Button icon={Download} onClick={exportMinutes}>
+                    Unduh notulen (.txt)
+                  </Button>
+                </div>
               </div>
             )}
 

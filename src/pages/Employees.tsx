@@ -115,7 +115,7 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
     setText('')
     setBusy(true)
     try {
-      const reply = await askEmployee(id, history, settings.model)
+      const reply = await askEmployee(id, history, { model: settings.model })
       setMsgs((m) => [...m, { from: 'ai', text: reply }])
     } catch (err) {
       setMsgs((m) => [...m, { from: 'sys', text: aiErrorText(err) }])
