@@ -211,7 +211,7 @@ export default function Analytics() {
             aside={avg !== null ? <span className="tabular text-xs text-mute">Rata-rata {avg.toFixed(1)} dari {entries.reviews.length} ulasan</span> : undefined}
           />
           {entries.reviews.length === 0 ? (
-            <EmptyState title="Belum ada ulasan" desc="Catat ulasan pelanggan agar William bisa membantu menyiapkan balasan." action={addBtn('reviews')} />
+            <EmptyState title="Belum ada ulasan" desc="Catat ulasan pelanggan agar Wahyu bisa membantu menyiapkan balasan." action={addBtn('reviews')} />
           ) : (
             <ul className="divide-y divide-line">
               {[...entries.reviews]

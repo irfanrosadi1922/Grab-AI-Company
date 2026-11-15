@@ -170,7 +170,7 @@ function Studio() {
       setSub(String(j.sub ?? '').slice(0, 60))
       setCta(String(j.cta ?? cta).slice(0, 30))
       setErr('')
-      toast('Teks ditulis Olivia. Periksa sebelum dipakai.', 'info')
+      toast('Teks ditulis Okta. Periksa sebelum dipakai.', 'info')
     } catch (e) {
       toast(aiErrorText(e), 'error')
     } finally {
@@ -306,7 +306,7 @@ function Studio() {
             <Art fmt={fmt} tpl={tpl} headline={headline} sub={sub} cta={cta} accent={accent} light={light} image={image} />
           </div>
         </div>
-        <p className="border-t border-line px-4 py-2.5 text-xs text-mute">Generate menyusun teks dari template; Tulis dengan AI memakai Olivia; Buat gambar AI membuat latar foto. Gambar AI bisa meleset dari deskripsi, periksa sebelum dipakai.</p>
+        <p className="border-t border-line px-4 py-2.5 text-xs text-mute">Generate menyusun teks dari template; Tulis dengan AI memakai Okta; Buat gambar AI membuat latar foto. Gambar AI bisa meleset dari deskripsi, periksa sebelum dipakai.</p>
       </Card>
 
       <Card className="order-3">
@@ -316,7 +316,7 @@ function Studio() {
             <Textarea value={brief} onChange={(e) => setBrief(e.target.value)} maxLength={400} className="min-h-[72px]" />
           </Field>
           <Button icon={Sparkles} onClick={() => void writeAi()} disabled={aiBusy} className="w-full">
-            {aiBusy ? 'Olivia menulis...' : 'Tulis dengan AI'}
+            {aiBusy ? 'Okta menulis...' : 'Tulis dengan AI'}
           </Button>
           <Field label="Deskripsi gambar AI" error={imgErr} hint="Contoh: semangkuk bakso kuah panas, latar kayu hangat. Teks tidak ikut digambar.">
             <Textarea value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} maxLength={400} className="min-h-[72px]" />
@@ -440,7 +440,7 @@ function Caption() {
             </Select>
           </Field>
           <Button variant="primary" icon={Sparkles} onClick={() => void makeAi()} disabled={aiBusy} className="w-full">
-            {aiBusy ? 'Olivia menulis...' : 'Generate dengan AI'}
+            {aiBusy ? 'Okta menulis...' : 'Generate dengan AI'}
           </Button>
           <Button icon={Sparkles} onClick={make} className="w-full">
             Dari template (tanpa AI)
@@ -616,7 +616,7 @@ export default function Marketing() {
   return (
     <div className="space-y-4">
       <PageHeader title="Marketing Studio" desc="Buat materi promosi, tulis caption, dan atur jadwal konten." />
-      <Notice tone="info">Desain dibuat dari template dan diekspor sebagai SVG atau PNG. Teks dan caption bisa ditulis AI (Olivia), latar gambar dibuat AI. Semua tersimpan di akun Anda.</Notice>
+      <Notice tone="info">Desain dibuat dari template dan diekspor sebagai SVG atau PNG. Teks dan caption bisa ditulis AI (Okta), latar gambar dibuat AI. Semua tersimpan di akun Anda.</Notice>
       <Tabs<Tab>
         value={tab}
         onChange={setTab}

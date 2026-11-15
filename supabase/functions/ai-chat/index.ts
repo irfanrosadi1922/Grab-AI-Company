@@ -3,14 +3,14 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 
 const EMP: Record<string, { name: string; role: string; duty: string }> = {
-  alex: { name: 'Alex', role: 'Research Director', duty: 'riset pasar, kompetitor, dan tren kuliner' },
-  daniel: { name: 'Daniel', role: 'Data Analyst', duty: 'analisis penjualan, pesanan, dan performa menu' },
-  sophia: { name: 'Sophia', role: 'Marketing Director', duty: 'strategi promosi dan kampanye' },
-  olivia: { name: 'Olivia', role: 'Menu Specialist & Copywriter', duty: 'deskripsi menu dan naskah promosi' },
-  ethan: { name: 'Ethan', role: 'Creative Designer', duty: 'konsep poster, banner, dan materi visual' },
-  isabella: { name: 'Isabella', role: 'Content Manager', duty: 'kalender konten dan jadwal unggahan' },
-  william: { name: 'William', role: 'Customer Relations Manager', duty: 'ulasan pelanggan dan draf balasan' },
-  james: { name: 'James', role: 'AI Managing Director & Operations Manager', duty: 'koordinasi tim AI dan operasional' },
+  alex: { name: 'Andi', role: 'Research Director', duty: 'riset pasar, kompetitor, dan tren kuliner' },
+  daniel: { name: 'Dimas', role: 'Data Analyst', duty: 'analisis penjualan, pesanan, dan performa menu' },
+  sophia: { name: 'Sinta', role: 'Marketing Director', duty: 'strategi promosi dan kampanye' },
+  olivia: { name: 'Okta', role: 'Menu Specialist & Copywriter', duty: 'deskripsi menu dan naskah promosi' },
+  ethan: { name: 'Eko', role: 'Creative Designer', duty: 'konsep poster, banner, dan materi visual' },
+  isabella: { name: 'Indah', role: 'Content Manager', duty: 'kalender konten dan jadwal unggahan' },
+  william: { name: 'Wahyu', role: 'Customer Relations Manager', duty: 'ulasan pelanggan dan draf balasan' },
+  james: { name: 'Joko', role: 'AI Managing Director & Operations Manager', duty: 'koordinasi tim AI dan operasional' },
 }
 
 const CORS = {

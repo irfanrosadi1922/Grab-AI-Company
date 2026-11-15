@@ -150,11 +150,11 @@ export default function Meeting() {
   }, [live])
 
   const meetingContext = () =>
-    `Jenis rapat: ${cfg.label}. Moderator: James. Peserta: ${people.map((p) => `${EMP[p].name} (${EMP[p].role})`).join(', ')}.\n` +
+    `Jenis rapat: ${cfg.label}. Moderator: Joko. Peserta: ${people.map((p) => `${EMP[p].name} (${EMP[p].role})`).join(', ')}.\n` +
     `Agenda: ${agenda.join('; ')}.\n` +
     `Keputusan sejauh ini: ${decisions.length ? decisions.map((d) => d.text).join('; ') : 'belum ada'}.`
 
-  // James (moderator) selalu menjawab; pembicara terpilih ikut menjawab jika berbeda.
+  // Joko (moderator) selalu menjawab; pembicara terpilih ikut menjawab jika berbeda.
   const sendChat = async () => {
     const t = chatText.trim()
     if (!t || busy) return
@@ -234,7 +234,7 @@ export default function Meeting() {
     <div>
       <PageHeader
         title="AI Meeting Room"
-        desc="Ruang rapat virtual dengan James sebagai moderator."
+        desc="Ruang rapat virtual dengan Joko sebagai moderator."
         actions={
           <Select aria-label="Jenis rapat" value={type} onChange={(e) => setType(e.target.value as MeetingType)} className="w-52">
             {TYPES.map((t) => (
@@ -248,7 +248,7 @@ export default function Meeting() {
 
       <Notice>
         Suara dua arah, transkrip langsung, dan avatar interaktif belum aktif. Semuanya butuh backend dan layanan suara
-        ({settings.voiceProvider}) yang belum terhubung. Yang berfungsi sekarang: agenda, chat tertulis dengan AI (James dan pembicara terpilih menjawab), ringkasan notulen oleh AI, log keputusan, dan penugasan.
+        ({settings.voiceProvider}) yang belum terhubung. Yang berfungsi sekarang: agenda, chat tertulis dengan AI (Joko dan pembicara terpilih menjawab), ringkasan notulen oleh AI, log keputusan, dan penugasan.
       </Notice>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_380px]">
@@ -388,7 +388,7 @@ export default function Meeting() {
             {panel === 'chat' && (
               <div className="flex h-full flex-col">
                 <div className="flex-1 space-y-2">
-                  {chat.length === 0 && <EmptyState title="Belum ada pesan" desc="James menjawab sebagai moderator. Pilih peserta lain di panggung agar ikut menjawab. Pesan tersimpan otomatis di tab Riwayat." />}
+                  {chat.length === 0 && <EmptyState title="Belum ada pesan" desc="Joko menjawab sebagai moderator. Pilih peserta lain di panggung agar ikut menjawab. Pesan tersimpan otomatis di tab Riwayat." />}
                   {chat.map((m, i) =>
                     m.who === 'CEO' ? (
                       <p key={i} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-xl bg-brand px-3 py-2 text-[13px] text-canvas">

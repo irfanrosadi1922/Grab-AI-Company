@@ -4,7 +4,7 @@ import type { Employee, EmployeeId } from '../types'
 export const EMPLOYEES: Employee[] = [
   {
     id: 'alex',
-    name: 'Alex',
+    name: 'Andi',
     role: 'Research Director',
     short: 'Research',
     hue: 210,
@@ -13,7 +13,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     id: 'daniel',
-    name: 'Daniel',
+    name: 'Dimas',
     role: 'Data Analyst',
     short: 'Analyst',
     hue: 190,
@@ -22,7 +22,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     id: 'sophia',
-    name: 'Sophia',
+    name: 'Sinta',
     role: 'Marketing Director',
     short: 'Marketing',
     hue: 330,
@@ -31,7 +31,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     id: 'olivia',
-    name: 'Olivia',
+    name: 'Okta',
     role: 'Menu Specialist & Copywriter',
     short: 'Menu',
     hue: 28,
@@ -40,7 +40,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     id: 'ethan',
-    name: 'Ethan',
+    name: 'Eko',
     role: 'Creative Designer',
     short: 'Design',
     hue: 265,
@@ -49,7 +49,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     id: 'isabella',
-    name: 'Isabella',
+    name: 'Indah',
     role: 'Content Manager',
     short: 'Content',
     hue: 168,
@@ -58,7 +58,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     id: 'william',
-    name: 'William',
+    name: 'Wahyu',
     role: 'Customer Relations Manager',
     short: 'Customer',
     hue: 44,
@@ -67,7 +67,7 @@ export const EMPLOYEES: Employee[] = [
   },
   {
     id: 'james',
-    name: 'James',
+    name: 'Joko',
     role: 'AI Managing Director & Operations Manager',
     short: 'Operations',
     hue: 140,

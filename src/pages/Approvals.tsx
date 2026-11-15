@@ -176,11 +176,11 @@ function Review({ a, onClose }: { a: Approval; onClose: () => void }) {
           {!a.decision && (
             <div className="space-y-2">
               <Button icon={Sparkles} onClick={() => void analyze()} disabled={busy}>
-                {busy ? 'James meninjau...' : 'Minta tinjauan AI'}
+                {busy ? 'Joko meninjau...' : 'Minta tinjauan AI'}
               </Button>
               {analysis && (
                 <div className="rounded-ctl border border-info/30 bg-info/5 p-3.5">
-                  <p className="mb-1 text-xs font-semibold text-mute">Tinjauan James (AI). Bukan keputusan; keputusan tetap di tangan Anda.</p>
+                  <p className="mb-1 text-xs font-semibold text-mute">Tinjauan Joko (AI). Bukan keputusan; keputusan tetap di tangan Anda.</p>
                   <p className="whitespace-pre-wrap text-[13px]">{analysis}</p>
                 </div>
               )}
