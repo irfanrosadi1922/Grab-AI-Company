@@ -148,7 +148,7 @@ function load(): Persisted {
     return {
       tasks: p.tasks ?? [],
       approvals: p.approvals ?? [],
-      stores: (p.stores ?? []).map((s) => ({ publicUrl: '', peekText: '', peekAt: '', ...s })),
+      stores: (p.stores ?? []).map((s) => ({ publicUrl: '', peekText: '', peekAt: '', ...(s as Partial<Store>) }) as Store),
       assets: p.assets ?? [],
       entries: { ...EMPTY_ENTRIES, ...(p.entries ?? {}) },
       plans: p.plans ?? [],
