@@ -1,0 +1,308 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { ClipboardPlus, MessageSquare, Send } from 'lucide-react'
+import { Avatar, Badge, Button, Card, DemoTag, EmptyState, Field, Input, Notice, PageHeader, SearchInput, Select, Tabs, Textarea } from '../components/ui'
+import { Modal } from '../components/Overlays'
+import { useApp } from '../state/AppState'
+import { EMPLOYEES, EMP } from '../data/employees'
+import type { EmployeeId, Priority } from '../types'
+import { StatusBadge } from '../components/ui'
+
+const stateTone = { Bekerja: 'brand', Siaga: 'warn', 'Dalam rapat': 'info', Nonaktif: 'neutral' } as const
+
+export function AssignTaskModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: EmployeeId }) {
+  const { addTask, toast, settings } = useApp()
+  const [title, setTitle] = useState('')
+  const [desc, setDesc] = useState('')
+  const [who, setWho] = useState<EmployeeId>(initial ?? 'james')
+  const [prio, setPrio] = useState<Priority>('Medium')
+  const [deadline, setDeadline] = useState('')
+  const [err, setErr] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (open) {
+      setWho(initial ?? 'james')
+      setTitle('')
+      setDesc('')
+      setDeadline('')
+      setPrio('Medium')
+      setErr({})
+    }
+  }, [open, initial])
+
+  const submit = () => {
+    const e: Record<string, string> = {}
+    if (title.trim().length < 4) e.title = 'Judul minimal 4 karakter.'
+    if (!deadline) e.deadline = 'Pilih tenggat waktu.'
+    if (!settings.employeeEnabled[who]) e.who = `${EMP[who].name} sedang dinonaktifkan di Settings.`
+    setErr(e)
+    if (Object.keys(e).length) return
+    addTask({ title: title.trim(), description: desc.trim(), assignee: who, priority: prio, deadline })
+    toast(`Tugas ditugaskan ke ${EMP[who].name}.`)
+    onClose()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Beri tugas"
+      footer={
+        <>
+          <Button onClick={onClose}>Batal</Button>
+          <Button variant="primary" onClick={submit}>
+            Tugaskan
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Judul tugas" error={err.title}>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Contoh: Riset promo kompetitor" />
+        </Field>
+        <Field label="Deskripsi (opsional)">
+          <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Karyawan AI" error={err.who}>
+            <Select value={who} onChange={(e) => setWho(e.target.value as EmployeeId)}>
+              {EMPLOYEES.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} · {e.short}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Prioritas">
+            <Select value={prio} onChange={(e) => setPrio(e.target.value as Priority)}>
+              {(['Low', 'Medium', 'High', 'Urgent'] as Priority[]).map((p) => (
+                <option key={p}>{p}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <Field label="Tenggat" error={err.deadline}>
+          <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  )
+}
+
+function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => void }) {
+  const [msgs, setMsgs] = useState<{ from: 'ceo' | 'sys'; text: string }[]>([])
+  const [text, setText] = useState('')
+  useEffect(() => setMsgs([]), [id])
+  if (!id) return null
+  const e = EMP[id]
+  const send = () => {
+    const t = text.trim()
+    if (!t) return
+    setMsgs((m) => [
+      ...m,
+      { from: 'ceo', text: t },
+      { from: 'sys', text: `${e.name} belum bisa membalas: model AI belum terhubung. Pesan ini tidak dikirim ke mana pun.` },
+    ])
+    setText('')
+  }
+  return (
+    <Modal open onClose={onClose} title={`Percakapan dengan ${e.name}`}>
+      <Notice>Antarmuka percakapan siap, tetapi balasan AI belum aktif karena backend dan penyedia model belum terhubung.</Notice>
+      <div className="mt-4 min-h-[160px] space-y-2">
+        {msgs.length === 0 && <p className="py-8 text-center text-[13px] text-mute">Belum ada pesan.</p>}
+        {msgs.map((m, i) => (
+          <div key={i} className={m.from === 'ceo' ? 'flex justify-end' : 'flex'}>
+            <p className={'max-w-[85%] rounded-xl px-3 py-2 text-[13px] ' + (m.from === 'ceo' ? 'bg-brand text-canvas' : 'bg-raised text-mute')}>{m.text}</p>
+          </div>
+        ))}
+      </div>
+      <form
+        className="mt-4 flex gap-2"
+        onSubmit={(ev) => {
+          ev.preventDefault()
+          send()
+        }}
+      >
+        <Input value={text} onChange={(e2) => setText(e2.target.value)} placeholder={`Tulis pesan untuk ${e.name}`} aria-label="Pesan" />
+        <Button variant="primary" icon={Send} type="submit" aria-label="Kirim">
+          <span className="hidden sm:inline">Kirim</span>
+        </Button>
+      </form>
+    </Modal>
+  )
+}
+
+function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: () => void; onAssign: () => void; onChat: () => void }) {
+  const { tasks } = useApp()
+  const e = EMP[id]
+  const [tab, setTab] = useState<'info' | 'tasks' | 'memory'>('info')
+  const mine = tasks.filter((t) => t.assignee === id)
+  return (
+    <Modal
+      open
+      wide
+      onClose={onClose}
+      title={e.name}
+      footer={
+        <>
+          <Button icon={MessageSquare} onClick={onChat}>
+            Buka percakapan
+          </Button>
+          <Button variant="primary" icon={ClipboardPlus} onClick={onAssign}>
+            Beri tugas
+          </Button>
+        </>
+      }
+    >
+      <div className="flex items-center gap-4">
+        <Avatar id={id} size={64} />
+        <div className="min-w-0">
+          <p className="font-semibold">{e.role}</p>
+          <div className="mt-1 flex items-center gap-2">
+            <Badge tone={stateTone[e.state]}>{e.state}</Badge>
+            <DemoTag />
+          </div>
+        </div>
+      </div>
+      <Tabs
+        className="mt-4"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: 'info', label: 'Ringkasan' },
+          { id: 'tasks', label: 'Riwayat tugas', count: mine.length },
+          { id: 'memory', label: 'Memori' },
+        ]}
+      />
+      {tab === 'info' && (
+        <div className="mt-4 space-y-4">
+          <p className="text-sm text-mute">{e.summary}</p>
+          <div>
+            <p className="mb-2 text-xs font-semibold text-mute">Tanggung jawab</p>
+            <ul className="space-y-1.5 text-[13px]">
+              {e.duties.map((d) => (
+                <li key={d} className="flex gap-2">
+                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-brand" />
+                  {d}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {e.metrics.map((m) => (
+              <div key={m.label} className="rounded-ctl border border-line p-3">
+                <p className="tabular text-lg font-bold">{m.value}</p>
+                <p className="text-xs text-mute">{m.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {tab === 'tasks' && (
+        <ul className="mt-4 divide-y divide-line">
+          {mine.length === 0 && <EmptyState title="Belum ada tugas" desc="Beri tugas pertama untuk karyawan ini." />}
+          {mine.map((t) => (
+            <li key={t.id} className="flex items-center justify-between gap-3 py-3">
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-medium">{t.title}</span>
+                <span className="text-xs text-mute">
+                  {t.id} · tenggat {t.deadline}
+                </span>
+              </span>
+              <StatusBadge status={t.status} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {tab === 'memory' && (
+        <div className="mt-4 space-y-3">
+          <ul className="space-y-2">
+            {e.memory.map((m) => (
+              <li key={m} className="rounded-ctl border border-line px-3 py-2 text-[13px]">
+                {m}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-mute">Contoh memori. Penyimpanan memori AI sungguhan belum diimplementasikan.</p>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+export default function Employees() {
+  const { settings } = useApp()
+  const [q, setQ] = useState('')
+  const [state, setState] = useState('all')
+  const [params, setParams] = useSearchParams()
+  const open = (params.get('open') as EmployeeId | null) ?? null
+  const [assign, setAssign] = useState<EmployeeId | null>(null)
+  const [chat, setChat] = useState<EmployeeId | null>(null)
+
+  const list = useMemo(
+    () =>
+      EMPLOYEES.filter(
+        (e) => (e.name + e.role).toLowerCase().includes(q.toLowerCase()) && (state === 'all' || e.state === state),
+      ),
+    [q, state],
+  )
+
+  const close = () => setParams({}, { replace: true })
+
+  return (
+    <div>
+      <PageHeader title="AI Employees" desc="Delapan karyawan AI dengan peran masing-masing. Status dan metrik di halaman ini masih data contoh." />
+      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_200px]">
+        <SearchInput value={q} onChange={setQ} placeholder="Cari nama atau jabatan" />
+        <Select aria-label="Filter status" value={state} onChange={(e) => setState(e.target.value)}>
+          <option value="all">Semua status</option>
+          <option>Bekerja</option>
+          <option>Siaga</option>
+          <option>Dalam rapat</option>
+          <option>Nonaktif</option>
+        </Select>
+      </div>
+
+      {list.length === 0 ? (
+        <Card>
+          <EmptyState title="Tidak ada karyawan yang cocok" desc="Ubah kata kunci atau filter status." />
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {list.map((e) => {
+            const enabled = settings.employeeEnabled[e.id]
+            return (
+              <Card key={e.id} className="flex flex-col p-4">
+                <button className="flex items-center gap-3 text-left" onClick={() => setParams({ open: e.id })}>
+                  <Avatar id={e.id} size={48} />
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{e.name}</span>
+                    <span className="block truncate text-xs text-mute">{e.role}</span>
+                  </span>
+                </button>
+                <p className="mt-3 line-clamp-3 flex-1 text-[13px] text-mute">{e.summary}</p>
+                <div className="mt-3">
+                  <Badge tone={enabled ? stateTone[e.state] : 'neutral'}>{enabled ? e.state : 'Nonaktif'}</Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button size="sm" icon={MessageSquare} onClick={() => setChat(e.id)}>
+                    Chat
+                  </Button>
+                  <Button size="sm" variant="primary" icon={ClipboardPlus} onClick={() => setAssign(e.id)}>
+                    Tugas
+                  </Button>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      {open && EMP[open] && (
+        <Detail id={open} onClose={close} onAssign={() => setAssign(open)} onChat={() => setChat(open)} />
+      )}
+      <AssignTaskModal open={assign !== null} initial={assign ?? undefined} onClose={() => setAssign(null)} />
+      <ChatDrawer id={chat} onClose={() => setChat(null)} />
+    </div>
+  )
+}

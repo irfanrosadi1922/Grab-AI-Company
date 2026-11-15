@@ -1,0 +1,59 @@
+import { Component, Suspense, lazy } from 'react'
+import type { ReactNode } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { AppShell } from './components/layout'
+import { ErrorState, PageLoading } from './components/ui'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Employees = lazy(() => import('./pages/Employees'))
+const Meeting = lazy(() => import('./pages/Meeting'))
+const Tasks = lazy(() => import('./pages/Tasks'))
+const Marketing = lazy(() => import('./pages/Marketing'))
+const Analytics = lazy(() => import('./pages/Analytics'))
+const Stores = lazy(() => import('./pages/Stores'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Approvals = lazy(() => import('./pages/Approvals'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+
+class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <ErrorState
+          title="Halaman ini gagal dimuat"
+          desc={this.state.error.message || 'Terjadi kesalahan tak terduga.'}
+          onRetry={() => this.setState({ error: null })}
+        />
+      )
+    }
+    return this.props.children
+  }
+}
+
+export default function App() {
+  return (
+    <Boundary>
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<Dashboard />} />
+            <Route path="employees" element={<Employees />} />
+            <Route path="meeting" element={<Meeting />} />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="marketing" element={<Marketing />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="stores" element={<Stores />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="approvals" element={<Approvals />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </Boundary>
+  )
+}
