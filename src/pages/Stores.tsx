@@ -114,7 +114,7 @@ function Detail({ s, onClose }: { s: Store; onClose: () => void }) {
           <div className="space-y-3 md:col-span-2">
             <p className="text-xs font-semibold text-mute">Pantau lewat web (halaman publik toko)</p>
             <p className="text-[13px] text-mute">
-              Selama koneksi resmi belum ada, karyawan AI bisa membaca halaman publik toko Anda di Grab (menu, rating, dan info yang tampil untuk pelanggan). Ini bukan data penjualan atau pesanan, dan tidak memakai akun Grab Anda.
+              Selama koneksi resmi belum ada, karyawan AI bisa memakai info publik toko Anda (menu, harga, rating). Halaman Grab biasanya tidak terbaca otomatis karena dimuat lewat JavaScript, jadi cara andalnya: salin teks halaman toko dari Safari lalu tempel di kolom bawah. Ini bukan data penjualan atau pesanan, dan tidak memakai akun Grab Anda.
             </p>
             <Field label="Tautan GrabFood toko" error={linkErr}>
               <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://food.grab.com/id/..." inputMode="url" autoCapitalize="off" />
