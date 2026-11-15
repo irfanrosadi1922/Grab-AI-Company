@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import App from './App'
-import { AppStateProvider } from './state/AppState'
+import Root from './Root'
+import { AuthProvider } from './state/Auth'
 import './index.css'
 
 // Safari iOS mengabaikan user-scalable=no; cegah cubit dan zoom ketuk-dua-kali secara eksplisit.
@@ -27,9 +27,9 @@ document.addEventListener('contextmenu', (e) => {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-      <AppStateProvider>
-        <App />
-      </AppStateProvider>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

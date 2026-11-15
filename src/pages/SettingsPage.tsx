@@ -3,6 +3,7 @@ import { Badge, Button, Card, CardHeader, Field, Input, Notice, PageHeader, Sele
 import type { Tone } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
 import { useApp } from '../state/AppState'
+import { useAuth } from '../state/Auth'
 import { EMPLOYEES } from '../data/employees'
 import { cn } from '../lib/format'
 
@@ -32,7 +33,8 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
 }
 
 export default function SettingsPage() {
-  const { settings, updateSettings, toast, resetDemo } = useApp()
+  const { settings, updateSettings, toast, resetDemo, sync } = useApp()
+  const { user, signOut, enabled } = useAuth()
   const [sec, setSec] = useState<Sec>('ceo')
   const [name, setName] = useState(settings.ceoName)
   const [email, setEmail] = useState(settings.ceoEmail)
@@ -217,7 +219,20 @@ export default function SettingsPage() {
 
             {sec === 'security' && (
               <div className="max-w-lg space-y-4">
-                <Notice tone="info">Belum ada akun atau login. Seluruh data tersimpan di browser ini saja. Autentikasi dan izin akses ditambahkan saat backend dibuat.</Notice>
+                {enabled && user ? (
+                  <>
+                    <Row title="Akun" desc={user.email ?? ''}>
+                      <Button onClick={() => void signOut()}>Keluar</Button>
+                    </Row>
+                    <Row title="Sinkronisasi Supabase" desc="Data tersimpan di akun ini dan tersedia di perangkat lain.">
+                      <Badge tone={sync === 'error' ? 'danger' : sync === 'saving' ? 'warn' : 'brand'}>
+                        {sync === 'error' ? 'Gagal menyimpan' : sync === 'saving' ? 'Menyimpan' : 'Tersimpan'}
+                      </Badge>
+                    </Row>
+                  </>
+                ) : (
+                  <Notice tone="info">Mode lokal: Supabase belum dikonfigurasi, data tersimpan di browser ini saja.</Notice>
+                )}
                 <Row title="Reset data demo" desc="Mengembalikan tugas, persetujuan, toko, aset, dan pengaturan ke kondisi awal.">
                   <Button variant="danger" onClick={() => setReset(true)}>
                     Reset

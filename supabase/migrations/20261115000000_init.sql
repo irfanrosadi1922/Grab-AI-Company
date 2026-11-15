@@ -1,5 +1,5 @@
 -- Grab AI Company: skema awal. Setiap baris dimiliki satu pengguna (user_id) dan dilindungi RLS.
--- Belum diterapkan ke database mana pun.
+-- Sudah diterapkan ke project Supabase "Grab AI Company".
 
 create table public.tasks (
   id text primary key,
@@ -24,8 +24,9 @@ create table public.approvals (
   summary text not null default '',
   recommendation text not null default '',
   risk text not null check (risk in ('Rendah','Sedang','Tinggi')),
+  created_at_label text not null default '',
   decision text check (decision in ('Approved','Rejected')),
-  decided_at timestamptz,
+  decided_at text,
   reason text,
   created_at timestamptz not null default now()
 );
@@ -38,7 +39,8 @@ create table public.stores (
   merchant_id text not null default '',
   is_open boolean not null default false,
   connection text not null default 'Belum terhubung',
-  last_sync timestamptz,
+  last_sync text,
+  demo jsonb not null default '{}',
   created_at timestamptz not null default now()
 );
 
@@ -51,6 +53,7 @@ create table public.assets (
   headline text not null,
   sub text not null default '',
   accent text not null,
+  created_at_label text not null default '',
   created_at timestamptz not null default now()
 );
 

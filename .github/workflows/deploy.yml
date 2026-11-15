@@ -30,6 +30,8 @@ jobs:
         run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_SUPABASE_URL: https://bnkaodnwwvkjbtrmuiep.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_wyHw-xVrv3vwoTIJDo8ebA_ixBQliDe
       - name: SPA fallback
         run: cp dist/index.html dist/404.html
       - uses: actions/configure-pages@v5

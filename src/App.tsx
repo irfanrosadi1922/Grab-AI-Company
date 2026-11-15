@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/layout'
 import { ErrorState, PageLoading } from './components/ui'
+import { useApp } from './state/AppState'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Employees = lazy(() => import('./pages/Employees'))
@@ -35,6 +36,14 @@ class Boundary extends Component<{ children: ReactNode }, { error: Error | null 
 }
 
 export default function App() {
+  const { ready } = useApp()
+  if (!ready) {
+    return (
+      <div className="p-6">
+        <PageLoading />
+      </div>
+    )
+  }
   return (
     <Boundary>
       <Suspense fallback={<PageLoading />}>

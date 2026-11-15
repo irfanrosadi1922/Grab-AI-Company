@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import type { Approval, Asset, EmployeeId, Store, Task, TaskStatus } from '../types'
 import { SEED_APPROVALS, SEED_ASSETS, SEED_STORES, SEED_TASKS } from '../data/seed'
 import { nowStamp } from '../lib/format'
+import { supabase } from '../lib/supabase'
+import { loadRemote, saveRemote } from '../lib/remote'
 
 export interface Settings {
   ceoName: string
@@ -56,7 +58,12 @@ interface ToastItem {
   tone: ToastTone
 }
 
+export type SyncState = 'local' | 'saving' | 'saved' | 'error'
+
 interface Ctx {
+  ready: boolean
+  sync: SyncState
+  userId?: string
   tasks: Task[]
   addTask: (t: Omit<Task, 'id' | 'history' | 'status'> & { status?: TaskStatus }, by?: string) => Task
   setTaskStatus: (id: string, status: TaskStatus, note?: string) => void
@@ -112,8 +119,16 @@ function load(): Persisted {
   }
 }
 
-export function AppStateProvider({ children }: { children: ReactNode }) {
-  const initial = useRef(load()).current
+const seedState = (): Persisted => ({
+  tasks: SEED_TASKS,
+  approvals: SEED_APPROVALS,
+  stores: SEED_STORES,
+  assets: SEED_ASSETS,
+  settings: DEFAULT_SETTINGS,
+})
+
+export function AppStateProvider({ children, userId }: { children: ReactNode; userId?: string }) {
+  const initial = useRef(userId ? seedState() : load()).current
   const [tasks, setTasks] = useState<Task[]>(initial.tasks)
   const [approvals, setApprovals] = useState<Approval[]>(initial.approvals)
   const [stores, setStores] = useState<Store[]>(initial.stores)
@@ -122,13 +137,56 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const toastId = useRef(0)
 
+  const [ready, setReady] = useState(!userId)
+  const [sync, setSync] = useState<SyncState>(userId ? 'saved' : 'local')
+  const loaded = useRef(!userId)
+
+  // Akun masuk: muat dari Supabase. Akun baru (belum ada data) memakai data contoh lalu menyimpannya.
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify({ tasks, approvals, stores, assets, settings }))
-    } catch {
-      /* penyimpanan penuh atau diblokir: aplikasi tetap berjalan */
+    if (!userId || !supabase) return
+    let cancelled = false
+    loadRemote(supabase, userId)
+      .then((r) => {
+        if (cancelled) return
+        if (r) {
+          setTasks(r.tasks)
+          setApprovals(r.approvals)
+          setStores(r.stores)
+          setAssets(r.assets)
+          setSettings({ ...DEFAULT_SETTINGS, ...r.settings })
+        }
+        loaded.current = true
+        setReady(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        // Gagal memuat: jangan menyimpan apa pun agar data di server tidak tertimpa data contoh.
+        setSync('error')
+        setReady(true)
+      })
+    return () => {
+      cancelled = true
     }
-  }, [tasks, approvals, stores, assets, settings])
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify({ tasks, approvals, stores, assets, settings }))
+      } catch {
+        /* penyimpanan penuh atau diblokir: aplikasi tetap berjalan */
+      }
+      return
+    }
+    if (!supabase || !loaded.current) return
+    setSync('saving')
+    const t = setTimeout(() => {
+      saveRemote(supabase!, userId, { tasks, approvals, stores, assets, settings })
+        .then(() => setSync('saved'))
+        .catch(() => setSync('error'))
+    }, 800)
+    return () => clearTimeout(t)
+  }, [userId, tasks, approvals, stores, assets, settings])
 
   const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
 
@@ -218,6 +276,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({
+      ready,
+      sync,
+      userId,
       tasks,
       addTask,
       setTaskStatus,
@@ -238,6 +299,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       resetDemo,
     }),
     [
+      ready,
+      sync,
+      userId,
       tasks,
       addTask,
       setTaskStatus,
