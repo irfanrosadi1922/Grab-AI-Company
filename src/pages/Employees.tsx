@@ -6,10 +6,13 @@ import { Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { EMPLOYEES, EMP } from '../data/employees'
 import type { ChatMsg, EmployeeId, Priority } from '../types'
-import { aiErrorText, askEmployee } from '../lib/ai'
+import { aiErrorText, askEmployee, checkEmployeeAi } from '../lib/ai'
 import type { Msg } from '../lib/ai'
 import { StatusBadge } from '../components/ui'
-import { loadKeyInfo, removeKey, saveKey } from '../lib/keys'
+import { clearEmployeeKey, loadEmployeeAi, saveEmployeeAi } from '../lib/keys'
+import type { EmployeeAi } from '../lib/keys'
+import { PROVIDERS, providerById } from '../data/providers'
+import type { ProviderId } from '../data/providers'
 import { employeeStats, workState } from '../lib/work'
 
 const stateTone = { Bekerja: 'brand', Siaga: 'warn', Nonaktif: 'neutral' } as const
@@ -176,16 +179,26 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
 function KeyTab({ id }: { id: EmployeeId }) {
   const { userId, toast } = useApp()
   const e = EMP[id]
-  const [last4, setLast4] = useState<string | null>(null)
+  const [cfg, setCfg] = useState<EmployeeAi | null>(null)
   const [loading, setLoading] = useState(true)
+  const [provider, setProvider] = useState<ProviderId>('groq')
+  const [model, setModel] = useState('')
   const [val, setVal] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [models, setModels] = useState<string[]>([])
+  const [test, setTest] = useState('')
 
   useEffect(() => {
     let off = false
-    loadKeyInfo()
-      .then((m) => !off && setLast4(m[id] ?? null))
+    loadEmployeeAi()
+      .then((m) => {
+        if (off) return
+        const c = m[id] ?? null
+        setCfg(c)
+        setProvider(c?.provider ?? 'groq')
+        setModel(c?.model ?? '')
+      })
       .catch(() => undefined)
       .finally(() => !off && setLoading(false))
     return () => {
@@ -193,33 +206,60 @@ function KeyTab({ id }: { id: EmployeeId }) {
     }
   }, [id])
 
-  if (!userId) return <Notice tone="info">Masuk dengan akun dulu untuk menyimpan kunci API.</Notice>
+  if (!userId) return <Notice tone="info">Masuk dengan akun dulu untuk mengatur model dan kunci AI.</Notice>
+
+  const info = providerById(provider)
+  const hasKey = !!cfg?.last4
+  const dirty = provider !== (cfg?.provider ?? 'groq') || model.trim() !== (cfg?.model ?? '') || val.trim() !== ''
 
   const save = async () => {
     const k = val.trim()
-    if (k.length < 20 || /\s/.test(k)) return setErr('Kunci tidak valid. Tempel kunci lengkap tanpa spasi.')
+    if (k && (k.length < 20 || /\s/.test(k))) return setErr('Kunci tidak valid. Tempel kunci lengkap tanpa spasi.')
+    if (provider !== 'groq' && !k && !(hasKey && provider === cfg?.provider)) return setErr(`${info.label} butuh kunci API milik Anda.`)
     setErr('')
     setBusy(true)
     try {
-      await saveKey(userId, id, k)
-      setLast4(k.slice(-4))
+      const switched = provider !== (cfg?.provider ?? 'groq')
+      await saveEmployeeAi(userId, id, { provider, model, key: k, clearKey: switched })
+      const keep = k ? k.slice(-4) : switched ? '' : cfg?.last4 ?? ''
+      setCfg({ provider, model: model.trim(), last4: keep })
       setVal('')
-      toast(`Kunci ${e.name} disimpan.`)
+      setTest('')
+      toast(`Pengaturan AI ${e.name} disimpan.`)
     } catch {
-      toast('Gagal menyimpan kunci. Coba lagi.', 'error')
+      toast('Gagal menyimpan. Coba lagi.', 'error')
     } finally {
       setBusy(false)
     }
   }
 
-  const remove = async () => {
+  const clear = async () => {
     setBusy(true)
     try {
-      await removeKey(userId, id)
-      setLast4(null)
-      toast('Kunci dihapus. Kembali memakai kunci bersama.', 'info')
+      await clearEmployeeKey(userId, id)
+      setCfg((c) => (c ? { ...c, last4: '' } : c))
+      setTest('')
+      toast('Kunci dihapus.', 'info')
     } catch {
       toast('Gagal menghapus kunci.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runTest = async () => {
+    setBusy(true)
+    setTest('')
+    try {
+      const r = await checkEmployeeAi(id)
+      if (!r.configured) setTest(`Belum ada kunci untuk ${providerById(r.provider ?? provider).label}.`)
+      else if (!r.valid) setTest('Kunci ditolak penyedia. Periksa kunci yang tersimpan.')
+      else {
+        setModels(r.models ?? [])
+        setTest(`Tersambung ke ${providerById(r.provider ?? provider).label}. Model aktif: ${r.model}. ${r.models?.length ?? 0} model tersedia (muncul sebagai saran di kolom model).`)
+      }
+    } catch (er) {
+      setTest(aiErrorText(er))
     } finally {
       setBusy(false)
     }
@@ -228,34 +268,47 @@ function KeyTab({ id }: { id: EmployeeId }) {
   return (
     <div className="mt-4 space-y-3">
       <p className="text-[13px] text-mute">
-        Kunci API Groq khusus untuk {e.name}. Jika kosong, {e.name} memakai kunci bersama dari Supabase. Kunci tersimpan di akun Anda dan hanya dipakai server; setelah disimpan, aplikasi tidak bisa menampilkannya lagi.
+        Pilih penyedia dan model AI khusus untuk {e.name}. Tiap karyawan bisa berbeda. Kunci tersimpan di akun Anda dan hanya dipakai server; setelah disimpan, aplikasi tidak bisa menampilkannya lagi.
       </p>
-      <div className="flex items-center gap-2 text-[13px]">
-        <Badge tone={last4 ? 'brand' : 'neutral'}>{loading ? 'Memeriksa...' : last4 ? 'Kunci khusus terpasang' : 'Memakai kunci bersama'}</Badge>
-        {last4 && <span className="tabular font-mono text-xs text-mute">••••{last4}</span>}
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <Badge tone={hasKey ? 'brand' : 'neutral'}>{loading ? 'Memeriksa...' : hasKey ? 'Kunci khusus terpasang' : provider === 'groq' ? 'Memakai kunci bersama (Groq)' : 'Belum ada kunci'}</Badge>
+        {hasKey && <span className="tabular font-mono text-xs text-mute">••••{cfg?.last4}</span>}
       </div>
-      <Field label={last4 ? 'Ganti kunci API' : 'Kunci API'} error={err}>
-        <Input
-          type="password"
-          value={val}
-          onChange={(ev) => setVal(ev.target.value)}
-          placeholder="gsk_..."
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          maxLength={200}
-        />
+      <Field label="Penyedia">
+        <Select value={provider} onChange={(ev) => { setProvider(ev.target.value as ProviderId); setModels([]); setTest('') }}>
+          {PROVIDERS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Model" hint={`Kosongkan untuk memakai bawaan (${info.defaultModel}). Nama model bisa berubah di penyedia; jalankan Tes koneksi untuk melihat daftar yang tersedia.`}>
+        <Input value={model} onChange={(ev) => setModel(ev.target.value)} placeholder={info.defaultModel} list="model-suggestions" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={80} />
+        <datalist id="model-suggestions">
+          {models.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+      </Field>
+      <Field label={hasKey && provider === cfg?.provider ? 'Ganti kunci API (opsional)' : 'Kunci API'} error={err}>
+        <Input type="password" value={val} onChange={(ev) => setVal(ev.target.value)} placeholder={info.keyHint} autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={200} />
       </Field>
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" onClick={() => void save()} disabled={busy || !val.trim()}>
-          Simpan kunci
+        <Button variant="primary" onClick={() => void save()} disabled={busy || !dirty}>
+          Simpan
         </Button>
-        {last4 && (
-          <Button variant="danger" onClick={() => void remove()} disabled={busy}>
+        <Button onClick={() => void runTest()} disabled={busy || dirty}>
+          Tes koneksi
+        </Button>
+        {hasKey && (
+          <Button variant="danger" onClick={() => void clear()} disabled={busy}>
             Hapus kunci
           </Button>
         )}
       </div>
+      {dirty && <p className="text-xs text-mute">Simpan dulu sebelum tes koneksi.</p>}
+      {test && <Notice tone="info">{test}</Notice>}
     </div>
   )
 }
@@ -302,7 +355,7 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
           { id: 'info', label: 'Ringkasan' },
           { id: 'tasks', label: 'Riwayat tugas', count: mine.length },
           { id: 'memory', label: 'Catatan' },
-          { id: 'key', label: 'Kunci API' },
+          { id: 'key', label: 'Model & Kunci' },
         ]}
       />
       {tab === 'info' && (

@@ -19,9 +19,9 @@ export const aiErrorText = (e: unknown) => {
     case 'local':
       return 'Masuk dengan akun dulu. AI hanya tersedia setelah Supabase terhubung.'
     case 'not_configured':
-      return 'Kunci Groq belum dipasang di Supabase (secret GROQ_API_KEY).'
+      return 'Kunci AI karyawan ini belum dipasang. Buka Karyawan, pilih karyawannya, tab Model & Kunci. Untuk Groq bisa juga lewat secret GROQ_API_KEY di Supabase.'
     case 'upstream':
-      return `Groq menolak permintaan${e.message ? `: ${e.message}` : '.'} Cek nama model di Settings → Model AI.`
+      return `Penyedia AI menolak permintaan${e.message ? `: ${e.message}` : '.'} Cek nama model dan kunci di tab Model & Kunci karyawan itu.`
     case 'bad_format':
       return 'Jawaban AI tidak bisa dibaca. Coba lagi.'
     case 'timeout':
@@ -45,7 +45,7 @@ async function invoke(body: Record<string, unknown>): Promise<any> {
       try {
         const j = await ctx.json()
         code = j?.error ?? 'error'
-        message = j?.message ?? ''
+        message = `${j?.provider ? `[${j.provider}] ` : ''}${j?.message ?? ''}`.trim()
       } catch {
         code = 'error'
       }
@@ -96,6 +96,15 @@ export interface AiStatus {
   valid?: boolean
   model?: string
   models?: string[]
+}
+
+export interface EmployeeAiStatus extends AiStatus {
+  provider?: string
+}
+
+/** Tes koneksi untuk satu karyawan: kunci valid? model apa yang tersedia? */
+export async function checkEmployeeAi(employee: string): Promise<EmployeeAiStatus> {
+  return (await invoke({ ping: true, employee })) as EmployeeAiStatus
 }
 
 export async function checkAi(): Promise<AiStatus> {
