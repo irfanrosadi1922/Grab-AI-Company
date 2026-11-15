@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Plus, Star, Trash2 } from 'lucide-react'
+import { FileUp, Plus, Star, Trash2 } from 'lucide-react'
 import { Button, Card, CardHeader, EmptyState, IconButton, Notice, PageHeader, Select, Tabs } from '../components/ui'
 import { AddEntryModal, ENTRY_TITLE } from '../components/EntryModal'
+import { ImportModal } from '../components/ImportModal'
 import { ConfirmDialog } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { salesSeries, storeTotals, weeklySeries } from '../lib/stats'
@@ -31,6 +32,7 @@ export default function Analytics() {
   const [tab, setTab] = useState<Tab>('sales')
   const [days, setDays] = useState('30')
   const [adding, setAdding] = useState<EntryKind | null>(null)
+  const [importing, setImporting] = useState(false)
   const [del, setDel] = useState<{ kind: EntryKind; id: string; label: string } | null>(null)
 
   const series = useMemo(() => salesSeries(entries.sales, Number(days)), [entries.sales, Number(days)])
@@ -61,6 +63,9 @@ export default function Analytics() {
         desc="Analisis dari data yang Anda catat sendiri."
         actions={
           <>
+            <Button icon={FileUp} onClick={() => setImporting(true)}>
+              Impor CSV
+            </Button>
             {tab !== 'trend' && tab !== 'stores' && kind && addBtn(kind)}
             <Select aria-label="Periode" value={days} onChange={(e) => setDays(e.target.value)} className="w-32">
               <option value="7">7 hari</option>
@@ -292,6 +297,7 @@ export default function Analytics() {
           </Card>
         ))}
 
+      {importing && <ImportModal open initialKind={kind ?? 'sales'} onClose={() => setImporting(false)} />}
       {adding && <AddEntryModal kind={adding} open onClose={() => setAdding(null)} />}
       <ConfirmDialog
         open={del !== null}

@@ -18,6 +18,7 @@ Semua data diisi sendiri oleh CEO. Tidak ada data contoh.
 **Berfungsi:**
 - Login (Supabase Auth) dan sinkronisasi data per akun dengan RLS
 - Task Center, Approval Center (buat permintaan, setujui/tolak), Grab Stores (tambah/hapus toko)
+- Impor CSV (penjualan, menu, ulasan, pemasaran) dari laporan portal merchant, dengan pratinjau dan laporan baris salah
 - Analytics, Dashboard, dan Reports dihitung dari penjualan, menu, ulasan, dan pemasaran yang Anda catat
 - Chat AI dengan karyawan, tinjauan persetujuan, ringkasan notulen, dan teks promosi lewat Edge Function `ai-chat` (Groq)
 - Marketing Studio: desain dari template, latar gambar AI (Edge Function `ai-image`), ekspor SVG/PNG, library aset, kalender konten
