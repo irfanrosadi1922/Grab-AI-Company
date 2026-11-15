@@ -24,8 +24,25 @@ const json = (b: unknown, status = 200) =>
 
 const GROQ = 'https://api.groq.com/openai/v1'
 
+// Hanya akun yang sudah login yang boleh memakai fungsi ini (kunci publik saja tidak cukup).
+async function isSignedIn(req: Request): Promise<boolean> {
+  const auth = req.headers.get('Authorization') ?? ''
+  const url = Deno.env.get('SUPABASE_URL')
+  const anon = Deno.env.get('SUPABASE_ANON_KEY')
+  if (!auth.startsWith('Bearer ') || !url || !anon) return false
+  try {
+    const r = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: auth, apikey: anon }, signal: AbortSignal.timeout(8000) })
+    if (!r.ok) return false
+    const u = await r.json()
+    return typeof u?.id === 'string'
+  } catch {
+    return false
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+  if (!(await isSignedIn(req))) return json({ error: 'unauthorized' }, 401)
 
   const key = Deno.env.get('GROQ_API_KEY')
   const defaultModel = Deno.env.get('GROQ_MODEL') ?? 'llama-3.3-70b-versatile'

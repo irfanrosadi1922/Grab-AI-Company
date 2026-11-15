@@ -83,7 +83,37 @@ export interface Asset {
   headline: string
   sub: string
   accent: string
+  cta: string
+  /** Jalur file gambar AI di Supabase Storage (bucket marketing-assets). Kosong jika desain tanpa gambar AI. */
+  imagePath?: string
   createdAt: string
+}
+
+export interface PlanItem {
+  id: string
+  date: string
+  title: string
+  channel: string
+  kind: 'Konten' | 'Kampanye'
+}
+
+export interface ChatMsg {
+  from: 'ceo' | 'ai' | 'sys'
+  text: string
+}
+
+export interface MeetingRecord {
+  id: string
+  type: string
+  typeLabel: string
+  startedAt: string
+  secs: number
+  participants: string[]
+  extraAgenda: string[]
+  checked: Record<string, boolean>
+  minutes: string
+  decisions: { at: string; text: string }[]
+  chat: { who: string; text: string }[]
 }
 
 /* Data yang diisi sendiri oleh CEO (belum ada integrasi GrabMerchant) */

@@ -20,7 +20,8 @@ Semua data diisi sendiri oleh CEO. Tidak ada data contoh.
 - Task Center, Approval Center (buat permintaan, setujui/tolak), Grab Stores (tambah/hapus toko)
 - Analytics, Dashboard, dan Reports dihitung dari penjualan, menu, ulasan, dan pemasaran yang Anda catat
 - Chat AI dengan karyawan, tinjauan persetujuan, ringkasan notulen, dan teks promosi lewat Edge Function `ai-chat` (Groq)
-- Marketing Studio: desain dari template, ekspor SVG/PNG, library aset
+- Marketing Studio: desain dari template, latar gambar AI (Edge Function `ai-image`), ekspor SVG/PNG, library aset, kalender konten
+- Semua perubahan (tugas, persetujuan, toko, data, aset, kalender, rapat, chat) tersimpan otomatis ke Supabase; indikator "Tersimpan" ada di bar atas
 
 **Belum ada:**
 - Koneksi GrabMerchant (butuh akses API resmi). Sementara itu penjualan dicatat manual
@@ -31,4 +32,5 @@ Semua data diisi sendiri oleh CEO. Tidak ada data contoh.
 
 1. Variabel build `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` (kunci publishable, aman di browser)
 2. Secret Supabase `GROQ_API_KEY` untuk Edge Function `ai-chat`
-3. Skema database di `supabase/migrations/`
+3. Opsional: secret `GEMINI_API_KEY` (dan `GEMINI_IMAGE_MODEL`) agar gambar memakai Gemini. Tanpa itu, `ai-image` memakai Pollinations tanpa kunci
+4. Skema database di `supabase/migrations/`

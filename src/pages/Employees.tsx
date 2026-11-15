@@ -5,7 +5,7 @@ import { Avatar, Badge, Button, Card, EmptyState, Field, Input, Notice, PageHead
 import { Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { EMPLOYEES, EMP } from '../data/employees'
-import type { EmployeeId, Priority } from '../types'
+import type { ChatMsg, EmployeeId, Priority } from '../types'
 import { aiErrorText, askEmployee } from '../lib/ai'
 import type { Msg } from '../lib/ai'
 import { StatusBadge } from '../components/ui'
@@ -93,17 +93,16 @@ export function AssignTaskModal({ open, onClose, initial }: { open: boolean; onC
 }
 
 function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => void }) {
-  const { settings } = useApp()
-  const [msgs, setMsgs] = useState<{ from: 'ceo' | 'ai' | 'sys'; text: string }[]>([])
+  const { settings, chats, setChat } = useApp()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
-    setMsgs([])
     setText('')
     setBusy(false)
   }, [id])
   if (!id) return null
   const e = EMP[id]
+  const msgs: ChatMsg[] = chats[id] ?? []
 
   const send = async () => {
     const t = text.trim()
@@ -112,7 +111,8 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
       ...msgs.filter((m) => m.from !== 'sys').map((m): Msg => ({ role: m.from === 'ceo' ? 'user' : 'assistant', content: m.text })),
       { role: 'user', content: t },
     ]
-    setMsgs((m) => [...m, { from: 'ceo', text: t }])
+    let thread: ChatMsg[] = [...msgs, { from: 'ceo', text: t }]
+    setChat(id, thread)
     setText('')
     setBusy(true)
     try {
@@ -121,9 +121,10 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
         model: settings.model,
         context: note ? `Catatan CEO untuk kamu (preferensi dan hal yang perlu diingat): ${note}` : undefined,
       })
-      setMsgs((m) => [...m, { from: 'ai', text: reply }])
+      thread = [...thread, { from: 'ai', text: reply }]
+      setChat(id, thread)
     } catch (err) {
-      setMsgs((m) => [...m, { from: 'sys', text: aiErrorText(err) }])
+      setChat(id, [...thread, { from: 'sys', text: aiErrorText(err) }])
     } finally {
       setBusy(false)
     }
@@ -150,6 +151,11 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
         ))}
         {busy && <p className="text-xs text-mute">{e.name} sedang mengetik...</p>}
       </div>
+      {msgs.length > 0 && !busy && (
+        <button type="button" onClick={() => setChat(id, [])} className="mt-2 text-xs text-mute underline">
+          Hapus riwayat percakapan
+        </button>
+      )}
       <form
         className="mt-4 flex gap-2"
         onSubmit={(ev) => {

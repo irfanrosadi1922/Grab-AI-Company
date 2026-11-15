@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Approval, Asset, Entries, EntryKind, EntryOf, EmployeeId, Store, Task, TaskStatus } from '../types'
+import type { Approval, Asset, ChatMsg, Entries, EntryKind, EntryOf, EmployeeId, MeetingRecord, PlanItem, Store, Task, TaskStatus } from '../types'
 import { newId, nowStamp } from '../lib/format'
 import { supabase } from '../lib/supabase'
-import { loadRemote, saveRemote } from '../lib/remote'
+import { fingerprints, loadRemote, saveRemote } from '../lib/remote'
 
 export interface Settings {
   ceoName: string
@@ -78,6 +78,17 @@ interface Ctx {
   assets: Asset[]
   addAsset: (a: Omit<Asset, 'id' | 'createdAt'>) => void
   removeAsset: (id: string) => void
+  plans: PlanItem[]
+  addPlan: (p: Omit<PlanItem, 'id'>) => void
+  removePlan: (id: string) => void
+  meetings: MeetingRecord[]
+  /** Menyimpan (membuat atau memperbarui) catatan rapat. */
+  saveMeeting: (m: MeetingRecord) => void
+  removeMeeting: (id: string) => void
+  chats: Record<string, ChatMsg[]>
+  setChat: (employee: string, msgs: ChatMsg[]) => void
+  /** Coba simpan ulang ke Supabase sekarang juga. */
+  retrySave: () => void
   settings: Settings
   updateSettings: (patch: Partial<Settings>) => void
   toasts: ToastItem[]
@@ -97,6 +108,9 @@ interface Persisted {
   stores: Store[]
   assets: Asset[]
   entries: Entries
+  plans: PlanItem[]
+  meetings: MeetingRecord[]
+  chats: Record<string, ChatMsg[]>
   settings: Settings
 }
 
@@ -106,6 +120,9 @@ const emptyState = (): Persisted => ({
   stores: [],
   assets: [],
   entries: EMPTY_ENTRIES,
+  plans: [],
+  meetings: [],
+  chats: {},
   settings: DEFAULT_SETTINGS,
 })
 
@@ -130,6 +147,9 @@ function load(): Persisted {
       stores: p.stores ?? [],
       assets: p.assets ?? [],
       entries: { ...EMPTY_ENTRIES, ...(p.entries ?? {}) },
+      plans: p.plans ?? [],
+      meetings: p.meetings ?? [],
+      chats: p.chats ?? {},
       settings: mergeSettings(p.settings),
     }
   } catch {
@@ -144,6 +164,9 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
   const [stores, setStores] = useState<Store[]>(initial.stores)
   const [assets, setAssets] = useState<Asset[]>(initial.assets)
   const [entries, setEntries] = useState<Entries>(initial.entries)
+  const [plans, setPlans] = useState<PlanItem[]>(initial.plans)
+  const [meetings, setMeetings] = useState<MeetingRecord[]>(initial.meetings)
+  const [chats, setChats] = useState<Record<string, ChatMsg[]>>(initial.chats)
   const [settings, setSettings] = useState<Settings>(initial.settings)
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const toastId = useRef(0)
@@ -151,7 +174,9 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
   const [ready, setReady] = useState(!userId)
   const [sync, setSync] = useState<SyncState>(userId ? 'saved' : 'local')
   const loaded = useRef(!userId)
-  const skipSave = useRef(false)
+  const inFlight = useRef(false)
+  const again = useRef(false)
+  const saved = useRef(new Map<string, string>())
 
   // Akun masuk: muat dari Supabase. Akun baru (belum ada baris pengaturan) mulai kosong dan langsung menyimpan.
   useEffect(() => {
@@ -161,13 +186,18 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       .then((r) => {
         if (cancelled) return
         if (r) {
-          skipSave.current = true // data baru saja dimuat dari server, tidak perlu ditulis balik
+          const merged = mergeSettings(r.settings)
+          // Sidik jari data server: penyimpanan berikutnya hanya menulis bagian yang benar-benar berubah.
+          saved.current = fingerprints(userId, { ...r, settings: merged })
           setTasks(r.tasks)
           setApprovals(r.approvals)
           setStores(r.stores)
           setAssets(r.assets)
           setEntries(r.entries)
-          setSettings(mergeSettings(r.settings))
+          setPlans(r.plans)
+          setMeetings(r.meetings)
+          setChats(r.chats)
+          setSettings(merged)
         }
         loaded.current = true
         setReady(true)
@@ -183,28 +213,68 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
     }
   }, [userId])
 
+  // Selalu berisi data terbaru, dibaca oleh penyimpanan yang berjalan di luar siklus render.
+  const latest = useRef({ tasks, approvals, stores, assets, entries, plans, meetings, chats, settings })
+  latest.current = { tasks, approvals, stores, assets, entries, plans, meetings, chats, settings }
+
+  // Penyimpanan berurutan: tidak pernah dua permintaan sekaligus; perubahan yang masuk saat menyimpan memicu putaran berikutnya.
+  const flush = useCallback(async () => {
+    if (!userId || !supabase || !loaded.current) return
+    if (inFlight.current) {
+      again.current = true
+      return
+    }
+    inFlight.current = true
+    setSync('saving')
+    try {
+      do {
+        again.current = false
+        await saveRemote(supabase, userId, latest.current, saved.current)
+      } while (again.current)
+      setSync('saved')
+    } catch {
+      setSync('error')
+    } finally {
+      inFlight.current = false
+    }
+  }, [userId])
+
   useEffect(() => {
     if (!userId) {
       try {
-        localStorage.setItem(KEY, JSON.stringify({ tasks, approvals, stores, assets, entries, settings }))
+        localStorage.setItem(KEY, JSON.stringify({ tasks, approvals, stores, assets, entries, plans, meetings, chats, settings }))
       } catch {
         /* penyimpanan penuh atau diblokir: aplikasi tetap berjalan */
       }
       return
     }
     if (!supabase || !ready || !loaded.current) return
-    if (skipSave.current) {
-      skipSave.current = false
-      return
-    }
     setSync('saving')
-    const t = setTimeout(() => {
-      saveRemote(supabase!, userId, { tasks, approvals, stores, assets, entries, settings })
-        .then(() => setSync('saved'))
-        .catch(() => setSync('error'))
-    }, 800)
+    const t = setTimeout(() => void flush(), 400)
     return () => clearTimeout(t)
-  }, [userId, ready, tasks, approvals, stores, assets, entries, settings])
+  }, [userId, ready, flush, tasks, approvals, stores, assets, entries, plans, meetings, chats, settings])
+
+  // Simpan seketika saat aplikasi disembunyikan atau ditutup, supaya perubahan terakhir tidak tertinggal.
+  useEffect(() => {
+    if (!userId) return
+    const hide = () => {
+      if (document.visibilityState === 'hidden') void flush()
+    }
+    const leave = () => void flush()
+    document.addEventListener('visibilitychange', hide)
+    window.addEventListener('pagehide', leave)
+    return () => {
+      document.removeEventListener('visibilitychange', hide)
+      window.removeEventListener('pagehide', leave)
+    }
+  }, [userId, flush])
+
+  // Gagal menyimpan: coba lagi otomatis setiap 8 detik sampai berhasil.
+  useEffect(() => {
+    if (sync !== 'error') return
+    const t = setTimeout(() => void flush(), 8000)
+    return () => clearTimeout(t)
+  }, [sync, flush])
 
   const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
 
@@ -291,7 +361,27 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
     setAssets((prev) => [{ ...a, id: newId('AS'), createdAt: nowStamp() }, ...prev])
   }, [])
 
-  const removeAsset = useCallback((id: string) => setAssets((p) => p.filter((a) => a.id !== id)), [])
+  const removeAsset = useCallback(
+    (id: string) => {
+      const a = assets.find((x) => x.id === id)
+      if (a?.imagePath && supabase) void supabase.storage.from('marketing-assets').remove([a.imagePath])
+      setAssets((p) => p.filter((x) => x.id !== id))
+    },
+    [assets],
+  )
+
+  const addPlan: Ctx['addPlan'] = useCallback((p) => {
+    setPlans((prev) => [...prev, { ...p, id: newId('P') }].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)))
+  }, [])
+  const removePlan = useCallback((id: string) => setPlans((p) => p.filter((x) => x.id !== id)), [])
+
+  const saveMeeting = useCallback((m: MeetingRecord) => {
+    setMeetings((prev) => (prev.some((x) => x.id === m.id) ? prev.map((x) => (x.id === m.id ? m : x)) : [m, ...prev]))
+  }, [])
+  const removeMeeting = useCallback((id: string) => setMeetings((p) => p.filter((x) => x.id !== id)), [])
+
+  const setChat = useCallback((employee: string, msgs: ChatMsg[]) => setChats((p) => ({ ...p, [employee]: msgs })), [])
+  const retrySave = useCallback(() => void flush(), [flush])
 
   const updateSettings = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), [])
 
@@ -301,8 +391,13 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
     setStores([])
     setAssets([])
     setEntries(EMPTY_ENTRIES)
+    setPlans([])
+    setMeetings([])
+    setChats({})
     setSettings(DEFAULT_SETTINGS)
-  }, [])
+    const paths = assets.flatMap((a) => (a.imagePath ? [a.imagePath] : []))
+    if (paths.length && supabase) void supabase.storage.from('marketing-assets').remove(paths)
+  }, [assets])
 
   const value = useMemo<Ctx>(
     () => ({
@@ -327,6 +422,15 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       assets,
       addAsset,
       removeAsset,
+      plans,
+      addPlan,
+      removePlan,
+      meetings,
+      saveMeeting,
+      removeMeeting,
+      chats,
+      setChat,
+      retrySave,
       settings,
       updateSettings,
       toasts,
@@ -356,6 +460,15 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       assets,
       addAsset,
       removeAsset,
+      plans,
+      addPlan,
+      removePlan,
+      meetings,
+      saveMeeting,
+      removeMeeting,
+      chats,
+      setChat,
+      retrySave,
       settings,
       updateSettings,
       toasts,

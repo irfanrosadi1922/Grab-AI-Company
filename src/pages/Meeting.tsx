@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ClipboardPlus, Download, Mic, MicOff, PhoneOff, Play, Plus, Send, Sparkles, Square, Video, VideoOff } from 'lucide-react'
+import { ClipboardPlus, Download, FolderOpen, Mic, MicOff, PhoneOff, Play, Plus, Send, Sparkles, Square, Trash2, Video, VideoOff } from 'lucide-react'
 import { Avatar, Badge, Button, Card, EmptyState, Input, Notice, PageHeader, Select, Tabs, Textarea } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
 import { AssignTaskModal } from './Employees'
 import { EMP } from '../data/employees'
-import { cn, downloadBlob } from '../lib/format'
+import { cn, downloadBlob, newId, nowStamp } from '../lib/format'
 import { useApp } from '../state/AppState'
 import { aiErrorText, askEmployee } from '../lib/ai'
 import type { Msg } from '../lib/ai'
-import type { EmployeeId } from '../types'
+import type { EmployeeId, MeetingRecord } from '../types'
 
 type MeetingType = 'board' | 'private' | 'department' | 'strategy' | 'emergency'
 
@@ -41,7 +41,7 @@ const TYPES: { id: MeetingType; label: string; people: EmployeeId[]; agenda: str
   },
 ]
 
-type Panel = 'chat' | 'agenda' | 'transcript' | 'minutes' | 'decisions' | 'tasks'
+type Panel = 'chat' | 'agenda' | 'transcript' | 'minutes' | 'decisions' | 'tasks' | 'history'
 
 const fmt = (s: number) => {
   const p = (n: number) => String(n).padStart(2, '0')
@@ -50,7 +50,7 @@ const fmt = (s: number) => {
 
 export default function Meeting() {
   const nav = useNavigate()
-  const { toast, settings } = useApp()
+  const { toast, settings, meetings, saveMeeting, removeMeeting } = useApp()
   const [type, setType] = useState<MeetingType>('board')
   const [privateWith, setPrivateWith] = useState<EmployeeId>('james')
   const [speaker, setSpeaker] = useState<EmployeeId>('james')
@@ -73,12 +73,71 @@ export default function Meeting() {
   const [decisions, setDecisions] = useState<{ at: string; text: string }[]>([])
   const [decText, setDecText] = useState('')
 
+  // Catatan rapat disimpan otomatis (ke Supabase lewat state aplikasi) setiap ada perubahan isi.
+  const meetingId = useRef<string | null>(null)
+  const startedAt = useRef('')
+  const secsRef = useRef(0)
+  secsRef.current = secs
+
   const cfg = TYPES.find((t) => t.id === type)!
   const people = useMemo<EmployeeId[]>(
     () => (type === 'private' ? Array.from(new Set<EmployeeId>(['james', privateWith])) : cfg.people),
     [type, privateWith, cfg],
   )
   const agenda = [...cfg.agenda, ...extraAgenda]
+
+  useEffect(() => {
+    const hasContent = chat.length > 0 || minutes.trim() !== '' || decisions.length > 0 || extraAgenda.length > 0 || Object.values(checked).some(Boolean) || secsRef.current > 0
+    if (!hasContent) return
+    if (!meetingId.current) {
+      meetingId.current = newId('M')
+      startedAt.current = nowStamp()
+    }
+    const rec: MeetingRecord = {
+      id: meetingId.current,
+      type,
+      typeLabel: cfg.label,
+      startedAt: startedAt.current,
+      secs: secsRef.current,
+      participants: people,
+      extraAgenda,
+      checked,
+      minutes,
+      decisions,
+      chat,
+    }
+    saveMeeting(rec)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat, minutes, decisions, extraAgenda, checked, live, type, privateWith])
+
+  const openMeeting = (m: MeetingRecord) => {
+    meetingId.current = m.id
+    startedAt.current = m.startedAt
+    setType(m.type as MeetingType)
+    setPrivateWith((m.participants.find((x) => x !== 'james') as EmployeeId | undefined) ?? 'james')
+    setSecs(m.secs)
+    setLive(false)
+    setChat(m.chat as { who: 'CEO' | EmployeeId; text: string }[])
+    setMinutes(m.minutes)
+    setDecisions(m.decisions)
+    setExtraAgenda(m.extraAgenda)
+    setChecked(m.checked)
+    setPanel('chat')
+    toast('Rapat dibuka dari riwayat.', 'info')
+  }
+
+  const newMeeting = () => {
+    meetingId.current = null
+    startedAt.current = ''
+    setSecs(0)
+    setLive(false)
+    setChat([])
+    setMinutes('')
+    setDecisions([])
+    setExtraAgenda([])
+    setChecked({})
+    setPanel('agenda')
+  }
 
   useEffect(() => {
     if (!people.includes(speaker)) setSpeaker(people[0])
@@ -285,6 +344,7 @@ export default function Meeting() {
                 { id: 'minutes', label: 'Notulen' },
                 { id: 'decisions', label: 'Keputusan', count: decisions.length },
                 { id: 'tasks', label: 'Tugas' },
+                { id: 'history', label: 'Riwayat', count: meetings.length },
               ]}
               className="border-0 p-0"
             />
@@ -328,7 +388,7 @@ export default function Meeting() {
             {panel === 'chat' && (
               <div className="flex h-full flex-col">
                 <div className="flex-1 space-y-2">
-                  {chat.length === 0 && <EmptyState title="Belum ada pesan" desc="James menjawab sebagai moderator. Pilih peserta lain di panggung agar ikut menjawab. Pesan hilang saat halaman ditutup." />}
+                  {chat.length === 0 && <EmptyState title="Belum ada pesan" desc="James menjawab sebagai moderator. Pilih peserta lain di panggung agar ikut menjawab. Pesan tersimpan otomatis di tab Riwayat." />}
                   {chat.map((m, i) =>
                     m.who === 'CEO' ? (
                       <p key={i} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-xl bg-brand px-3 py-2 text-[13px] text-canvas">
@@ -407,6 +467,47 @@ export default function Meeting() {
               </div>
             )}
 
+            {panel === 'history' && (
+              <div className="space-y-3">
+                <p className="text-[13px] text-mute">Setiap rapat tersimpan otomatis di akun Anda.</p>
+                <Button icon={Plus} onClick={newMeeting}>
+                  Rapat baru
+                </Button>
+                {meetings.length === 0 ? (
+                  <EmptyState title="Belum ada rapat tersimpan" desc="Rapat tersimpan begitu ada chat, notulen, atau keputusan." />
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {meetings.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between gap-2 py-2.5">
+                        <div className="min-w-0 text-[13px]">
+                          <p className="truncate font-medium">
+                            {m.typeLabel}
+                            {m.id === meetingId.current && <span className="ml-2 text-xs text-brand">sedang dibuka</span>}
+                          </p>
+                          <p className="truncate text-xs text-mute">
+                            {m.startedAt} · {m.chat.length} pesan · {m.decisions.length} keputusan
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-1.5">
+                          <Button size="sm" icon={FolderOpen} aria-label="Buka rapat" onClick={() => openMeeting(m)} />
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon={Trash2}
+                            aria-label="Hapus rapat"
+                            onClick={() => {
+                              if (m.id === meetingId.current) newMeeting()
+                              removeMeeting(m.id)
+                            }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
             {panel === 'tasks' && (
               <div className="space-y-3">
                 <p className="text-[13px] text-mute">Tugaskan tindak lanjut rapat ke salah satu karyawan AI. Tugas akan muncul di Task Center.</p>
@@ -424,7 +525,7 @@ export default function Meeting() {
         open={leave}
         onClose={() => setLeave(false)}
         title="Keluar dari rapat?"
-        desc="Notulen, chat, dan keputusan yang belum diunduh akan hilang."
+        desc="Notulen, chat, dan keputusan tersimpan otomatis di tab Riwayat dan bisa dibuka lagi."
         confirmLabel="Keluar"
         danger
         onConfirm={() => nav('/')}

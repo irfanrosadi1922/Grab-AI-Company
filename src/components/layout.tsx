@@ -161,7 +161,7 @@ export function BottomNav() {
 }
 
 export function Topbar() {
-  const { settings, approvals, tasks } = useApp()
+  const { settings, approvals, tasks, sync, userId, retrySave } = useApp()
   const nav = useNavigate()
   const [q, setQ] = useState('')
   const [focus, setFocus] = useState(false)
@@ -247,6 +247,21 @@ export function Topbar() {
             </div>
           )}
         </div>
+
+        {userId && (
+          <button
+            onClick={() => sync === 'error' && retrySave()}
+            aria-live="polite"
+            title={sync === 'error' ? 'Ketuk untuk mencoba lagi' : undefined}
+            className={cn(
+              'flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium',
+              sync === 'error' ? 'border-danger/40 text-danger' : 'border-line text-mute',
+            )}
+          >
+            <span className={cn('h-1.5 w-1.5 rounded-full', sync === 'error' ? 'bg-danger' : sync === 'saving' ? 'bg-warn' : 'bg-brand')} />
+            {sync === 'error' ? 'Gagal, ulangi' : sync === 'saving' ? 'Menyimpan' : 'Tersimpan'}
+          </button>
+        )}
 
         <div className="relative">
           <button

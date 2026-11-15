@@ -1,11 +1,12 @@
-import { useMemo, useRef, useState } from 'react'
-import { CalendarPlus, Copy, Download, ImageDown, Save, Sparkles, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarPlus, Copy, Download, ImageDown, ImagePlus, Save, Sparkles, Trash2 } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Notice, PageHeader, Select, Tabs, Textarea } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { cn, downloadBlob } from '../lib/format'
-import type { Asset } from '../types'
+import type { Asset, PlanItem } from '../types'
 import { AiError, aiErrorText, askEmployee, parseJson } from '../lib/ai'
+import { generateImage, imageErrorText, loadStoredImage, uploadImage } from '../lib/image'
 
 type Tab = 'studio' | 'caption' | 'plan' | 'library'
 
@@ -46,9 +47,12 @@ interface ArtProps {
   cta: string
   accent: string
   light?: boolean
+  /** Gambar latar (data URL). Jika ada, teks otomatis terang di atas lapisan gelap. */
+  image?: string | null
 }
 
-export function Art({ fmt, tpl, headline, sub, cta, accent, light }: ArtProps) {
+export function Art({ fmt, tpl, headline, sub, cta, accent, light: lightProp, image }: ArtProps) {
+  const light = image ? false : lightProp
   const f = FORMATS.find((x) => x.id === fmt) ?? FORMATS[0]
   const bg = light ? '#f4f7f5' : '#10171a'
   const fg = light ? '#10171a' : '#f2f6f4'
@@ -61,6 +65,19 @@ export function Art({ fmt, tpl, headline, sub, cta, accent, light }: ArtProps) {
   return (
     <svg viewBox={`0 0 ${f.w} ${f.h}`} xmlns="http://www.w3.org/2000/svg" className="h-auto w-full" role="img" aria-label={`Pratinjau ${headline}`}>
       <rect width={f.w} height={f.h} fill={bg} />
+      {image && (
+        <>
+          <image href={image} x={0} y={0} width={f.w} height={f.h} preserveAspectRatio="xMidYMid slice" />
+          <defs>
+            <linearGradient id="art-shade" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#000" stopOpacity="0.15" />
+              <stop offset="0.45" stopColor="#000" stopOpacity="0.55" />
+              <stop offset="1" stopColor="#000" stopOpacity="0.75" />
+            </linearGradient>
+          </defs>
+          <rect width={f.w} height={f.h} fill="url(#art-shade)" />
+        </>
+      )}
       {tpl === 'split' && <rect x={f.w * 0.62} width={f.w * 0.38} height={f.h} fill={accent} />}
       {tpl === 'bold' && <rect width={f.w} height={f.h * 0.06} fill={accent} />}
       {tpl === 'minimal' && <rect x={x} y={startY - size * 1.6} width={f.w * 0.1} height={4} fill={accent} />}
@@ -97,7 +114,7 @@ function svgString(el: SVGSVGElement | null) {
 }
 
 function Studio() {
-  const { addAsset, toast, settings } = useApp()
+  const { addAsset, toast, settings, userId } = useApp()
   const [brief, setBrief] = useState('')
   const [briefErr, setBriefErr] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -109,6 +126,11 @@ function Studio() {
   const [accent, setAccent] = useState(ACCENTS[0])
   const [light, setLight] = useState(false)
   const [err, setErr] = useState('')
+  const [imgPrompt, setImgPrompt] = useState('')
+  const [imgErr, setImgErr] = useState('')
+  const [image, setImage] = useState<string | null>(null)
+  const [imgBusy, setImgBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const idx = useRef(0)
 
@@ -165,10 +187,36 @@ function Studio() {
     return true
   }
 
-  const save = () => {
-    if (!valid()) return
-    addAsset({ name: headline.trim(), format: fmt, template: tpl, headline: headline.trim(), sub, accent })
-    toast('Disimpan ke Aset.')
+  const makeImage = async () => {
+    if (imgPrompt.trim().length < 5) return setImgErr('Deskripsikan gambarnya (min. 5 karakter).')
+    setImgErr('')
+    setImgBusy(true)
+    try {
+      setImage(await generateImage(imgPrompt.trim(), fmt))
+      toast('Gambar jadi. Teks desain tampil di atasnya.', 'info')
+    } catch (e) {
+      setImgErr(imageErrorText(e))
+    } finally {
+      setImgBusy(false)
+    }
+  }
+
+  const save = async () => {
+    if (!valid() || saving) return
+    setSaving(true)
+    try {
+      let imagePath: string | undefined
+      if (image) {
+        if (!userId) throw new AiError('local')
+        imagePath = await uploadImage(userId, image)
+      }
+      addAsset({ name: headline.trim(), format: fmt, template: tpl, headline: headline.trim(), sub, cta, accent, imagePath })
+      toast('Disimpan ke Aset.')
+    } catch (e) {
+      toast(e instanceof AiError && e.code === 'upload' ? `Gagal mengunggah gambar${e.message ? `: ${e.message}` : '.'}` : imageErrorText(e), 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const downloadSvg = () => {
@@ -242,7 +290,7 @@ function Studio() {
             <Button icon={Sparkles} onClick={generate}>
               Generate
             </Button>
-            <Button icon={Save} onClick={save}>
+            <Button icon={Save} onClick={() => void save()} disabled={saving}>
               Save
             </Button>
             <Button variant="primary" icon={Download} onClick={downloadSvg}>
@@ -255,10 +303,10 @@ function Studio() {
         </div>
         <div className="flex justify-center bg-canvas p-4 sm:p-6">
           <div ref={box} className={cn('w-full overflow-hidden rounded-ctl border border-line', fmt === 'story' ? 'max-w-[260px]' : fmt === 'poster' ? 'max-w-[340px]' : fmt === 'social' ? 'max-w-[420px]' : 'max-w-full')}>
-            <Art fmt={fmt} tpl={tpl} headline={headline} sub={sub} cta={cta} accent={accent} light={light} />
+            <Art fmt={fmt} tpl={tpl} headline={headline} sub={sub} cta={cta} accent={accent} light={light} image={image} />
           </div>
         </div>
-        <p className="border-t border-line px-4 py-2.5 text-xs text-mute">Generate menyusun teks dari template; Tulis dengan AI memakai Olivia. Pembuatan gambar oleh AI belum ada.</p>
+        <p className="border-t border-line px-4 py-2.5 text-xs text-mute">Generate menyusun teks dari template; Tulis dengan AI memakai Olivia; Buat gambar AI membuat latar foto. Gambar AI bisa meleset dari deskripsi, periksa sebelum dipakai.</p>
       </Card>
 
       <Card className="order-3">
@@ -270,6 +318,17 @@ function Studio() {
           <Button icon={Sparkles} onClick={() => void writeAi()} disabled={aiBusy} className="w-full">
             {aiBusy ? 'Olivia menulis...' : 'Tulis dengan AI'}
           </Button>
+          <Field label="Deskripsi gambar AI" error={imgErr} hint="Contoh: semangkuk bakso kuah panas, latar kayu hangat. Teks tidak ikut digambar.">
+            <Textarea value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} maxLength={400} className="min-h-[72px]" />
+          </Field>
+          <Button icon={ImagePlus} onClick={() => void makeImage()} disabled={imgBusy} className="w-full">
+            {imgBusy ? 'Membuat gambar...' : image ? 'Buat ulang gambar' : 'Buat gambar AI'}
+          </Button>
+          {image && (
+            <Button variant="danger" icon={Trash2} onClick={() => setImage(null)} className="w-full">
+              Hapus gambar
+            </Button>
+          )}
           <Field label="Judul" error={err}>
             <Input value={headline} maxLength={60} onChange={(e) => setHeadline(e.target.value)} />
           </Field>
@@ -419,17 +478,8 @@ function Caption() {
   )
 }
 
-interface PlanItem {
-  id: number
-  date: string
-  title: string
-  channel: string
-  kind: 'Konten' | 'Kampanye'
-}
-
 function Plan() {
-  const { toast } = useApp()
-  const [items, setItems] = useState<PlanItem[]>([])
+  const { toast, plans: items, addPlan, removePlan } = useApp()
   const [date, setDate] = useState('')
   const [title, setTitle] = useState('')
   const [channel, setChannel] = useState('Instagram')
@@ -439,7 +489,7 @@ function Plan() {
   const add = () => {
     if (!date || title.trim().length < 3) return setErr('Isi tanggal dan judul (min. 3 karakter).')
     setErr('')
-    setItems((p) => [...p, { id: Date.now(), date, title: title.trim(), channel, kind }].sort((a, b) => (a.date < b.date ? -1 : 1)))
+    addPlan({ date, title: title.trim(), channel, kind })
     setTitle('')
     toast('Ditambahkan ke kalender.')
   }
@@ -477,7 +527,7 @@ function Plan() {
       <Card>
         <CardHeader title="Kalender konten dan kampanye" />
         {items.length === 0 ? (
-          <EmptyState title="Kalender kosong" desc="Jadwal di sini hanya tersimpan selama halaman terbuka." />
+          <EmptyState title="Kalender kosong" desc="Jadwal tersimpan otomatis di akun Anda." />
         ) : (
           <ul className="divide-y divide-line">
             {items.map((it) => (
@@ -488,7 +538,10 @@ function Plan() {
                     {it.date} · {it.channel}
                   </p>
                 </div>
-                <Badge tone={it.kind === 'Kampanye' ? 'warn' : 'info'}>{it.kind}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge tone={it.kind === 'Kampanye' ? 'warn' : 'info'}>{it.kind}</Badge>
+                  <Button size="sm" variant="danger" icon={Trash2} aria-label="Hapus jadwal" onClick={() => removePlan(it.id)} />
+                </div>
               </li>
             ))}
           </ul>
@@ -498,10 +551,21 @@ function Plan() {
   )
 }
 
+function StoredArt({ a }: { a: Asset }) {
+  const [img, setImg] = useState<string | null>(null)
+  useEffect(() => {
+    let off = false
+    if (a.imagePath) loadStoredImage(a.imagePath).then((d) => !off && setImg(d)).catch(() => undefined)
+    return () => {
+      off = true
+    }
+  }, [a.imagePath])
+  return <Art fmt={a.format} tpl={a.template} headline={a.headline} sub={a.sub} cta={a.cta || 'Pesan'} accent={a.accent} image={img} />
+}
+
 function Library() {
   const { assets, removeAsset, toast } = useApp()
   const [del, setDel] = useState<Asset | null>(null)
-  const light = false
   const thumbs = useMemo(() => assets, [assets])
   if (thumbs.length === 0) {
     return (
@@ -517,7 +581,7 @@ function Library() {
           <Card key={a.id} className="overflow-hidden">
             <div className="flex h-44 items-center justify-center bg-canvas p-3">
               <div className="max-h-full w-full max-w-[120px] overflow-hidden rounded-md border border-line">
-                <Art fmt={a.format} tpl={a.template} headline={a.headline} sub={a.sub} cta="Pesan" accent={a.accent} light={light} />
+                <StoredArt a={a} />
               </div>
             </div>
             <div className="flex items-center justify-between gap-2 p-3">
@@ -552,7 +616,7 @@ export default function Marketing() {
   return (
     <div className="space-y-4">
       <PageHeader title="Marketing Studio" desc="Buat materi promosi, tulis caption, dan atur jadwal konten." />
-      <Notice tone="info">Desain dibuat dari template dan diekspor sebagai SVG atau PNG. Teks dan caption bisa ditulis AI (Olivia). Pembuatan gambar oleh AI belum ada.</Notice>
+      <Notice tone="info">Desain dibuat dari template dan diekspor sebagai SVG atau PNG. Teks dan caption bisa ditulis AI (Olivia), latar gambar dibuat AI. Semua tersimpan di akun Anda.</Notice>
       <Tabs<Tab>
         value={tab}
         onChange={setTab}
