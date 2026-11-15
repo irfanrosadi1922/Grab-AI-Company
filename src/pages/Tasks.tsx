@@ -7,16 +7,18 @@ import { AssignTaskModal } from './Employees'
 import { useApp } from '../state/AppState'
 import { EMP, EMPLOYEES } from '../data/employees'
 import type { Task, TaskStatus } from '../types'
-import { cn } from '../lib/format'
+import { cn, todayStr } from '../lib/format'
+import { ConfirmDialog } from '../components/Overlays'
 
 export const STATUSES: TaskStatus[] = ['Pending', 'Assigned', 'In Progress', 'Review', 'Completed', 'Failed', 'Requires Approval']
 
-const isLate = (t: Task) => t.deadline < '2026-11-15' && !['Completed', 'Failed'].includes(t.status)
+const isLate = (t: Task) => t.deadline < todayStr() && !['Completed', 'Failed'].includes(t.status)
 
 function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const { tasks, setTaskStatus, setTaskResult, toast } = useApp()
+  const { tasks, setTaskStatus, setTaskResult, removeTask, toast } = useApp()
   const t = tasks.find((x) => x.id === id)
   const [result, setResult] = useState(t?.result ?? '')
+  const [del, setDel] = useState(false)
   if (!t) return null
   return (
     <Modal
@@ -26,6 +28,9 @@ function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
       title={`${t.id} · ${t.title}`}
       footer={
         <>
+          <Button variant="danger" onClick={() => setDel(true)} className="mr-auto">
+            Hapus
+          </Button>
           <Button onClick={onClose}>Tutup</Button>
           <Button
             variant="primary"
@@ -85,6 +90,19 @@ function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={del}
+        onClose={() => setDel(false)}
+        title="Hapus tugas ini?"
+        desc={`"${t.title}" beserta riwayatnya akan dihapus permanen.`}
+        confirmLabel="Hapus"
+        danger
+        onConfirm={() => {
+          removeTask(t.id)
+          toast('Tugas dihapus.', 'info')
+          onClose()
+        }}
+      />
     </Modal>
   )
 }

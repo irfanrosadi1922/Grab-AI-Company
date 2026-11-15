@@ -1,6 +1,6 @@
 import type { Employee, EmployeeId } from '../types'
 
-// Seluruh metrik dan status di bawah ini adalah DATA DEMO, bukan hasil kerja AI sungguhan.
+// Identitas dan deskripsi peran. Status dan statistik dihitung dari tugas nyata (lib/work.ts).
 export const EMPLOYEES: Employee[] = [
   {
     id: 'alex',
@@ -10,13 +10,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 210,
     summary: 'Riset pasar, kompetitor, dan tren kuliner untuk mendukung keputusan CEO.',
     duties: ['Riset kompetitor sekitar toko', 'Pemantauan tren menu', 'Ringkasan peluang pasar'],
-    state: 'Bekerja',
-    metrics: [
-      { label: 'Riset selesai', value: '14' },
-      { label: 'Rata-rata durasi', value: '2,4 jam' },
-      { label: 'Disetujui CEO', value: '92%' },
-    ],
-    memory: ['CEO lebih suka ringkasan satu halaman', 'Fokus wilayah: area toko aktif'],
   },
   {
     id: 'daniel',
@@ -26,13 +19,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 190,
     summary: 'Mengolah data penjualan, pesanan, dan performa menu menjadi temuan yang bisa ditindaklanjuti.',
     duties: ['Analisis penjualan harian', 'Performa menu', 'Perbandingan antar toko'],
-    state: 'Bekerja',
-    metrics: [
-      { label: 'Laporan dibuat', value: '31' },
-      { label: 'Akurasi rujukan', value: '96%' },
-      { label: 'Rata-rata durasi', value: '1,1 jam' },
-    ],
-    memory: ['Periode laporan default: 30 hari', 'Mata uang: Rupiah'],
   },
   {
     id: 'sophia',
@@ -42,13 +28,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 330,
     summary: 'Menyusun strategi promosi dan kampanye, lalu mengoordinasikan tim kreatif.',
     duties: ['Rencana kampanye', 'Anggaran promosi', 'Koordinasi tim kreatif'],
-    state: 'Bekerja',
-    metrics: [
-      { label: 'Kampanye aktif', value: '3' },
-      { label: 'Disetujui CEO', value: '88%' },
-      { label: 'Rata-rata durasi', value: '3,2 jam' },
-    ],
-    memory: ['Promo besar wajib persetujuan CEO', 'Nada brand: hangat, jelas, tidak berlebihan'],
   },
   {
     id: 'olivia',
@@ -58,13 +37,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 28,
     summary: 'Menulis deskripsi menu, paket, dan teks promosi yang menggugah selera.',
     duties: ['Deskripsi menu', 'Naskah promosi', 'Rekomendasi paket bundling'],
-    state: 'Siaga',
-    metrics: [
-      { label: 'Teks dibuat', value: '57' },
-      { label: 'Revisi rata-rata', value: '1,3x' },
-      { label: 'Disetujui CEO', value: '90%' },
-    ],
-    memory: ['Hindari klaim kesehatan', 'Gaya bahasa: Indonesia santai-sopan'],
   },
   {
     id: 'ethan',
@@ -74,13 +46,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 265,
     summary: 'Membuat poster, banner, dan materi visual sesuai identitas brand.',
     duties: ['Poster dan banner', 'Materi media sosial', 'Pengelolaan aset kreatif'],
-    state: 'Bekerja',
-    metrics: [
-      { label: 'Desain dibuat', value: '42' },
-      { label: 'Revisi rata-rata', value: '1,8x' },
-      { label: 'Disetujui CEO', value: '85%' },
-    ],
-    memory: ['Warna utama: hijau Grab', 'Format cetak: A4 dan A3'],
   },
   {
     id: 'isabella',
@@ -90,13 +55,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 168,
     summary: 'Mengatur kalender konten dan jadwal unggahan di seluruh kanal.',
     duties: ['Kalender konten', 'Jadwal unggahan', 'Kurasi caption'],
-    state: 'Siaga',
-    metrics: [
-      { label: 'Konten terjadwal', value: '18' },
-      { label: 'Tepat waktu', value: '97%' },
-      { label: 'Disetujui CEO', value: '91%' },
-    ],
-    memory: ['Unggahan terbaik: siang dan malam', 'Satu kanal utama: Instagram'],
   },
   {
     id: 'william',
@@ -106,13 +64,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 44,
     summary: 'Memantau ulasan pelanggan dan menyiapkan draf balasan untuk disetujui.',
     duties: ['Pantau ulasan', 'Draf balasan keluhan', 'Ringkasan sentimen'],
-    state: 'Dalam rapat',
-    metrics: [
-      { label: 'Ulasan diproses', value: '120' },
-      { label: 'Balasan disetujui', value: '94%' },
-      { label: 'Respons rata-rata', value: '12 menit' },
-    ],
-    memory: ['Balasan keluhan wajib persetujuan CEO', 'Nada: empatik dan ringkas'],
   },
   {
     id: 'james',
@@ -122,13 +73,6 @@ export const EMPLOYEES: Employee[] = [
     hue: 140,
     summary: 'Mengoordinasikan seluruh karyawan AI, memoderasi rapat, dan memastikan tugas selesai tepat waktu.',
     duties: ['Moderator rapat', 'Pembagian tugas', 'Eskalasi ke CEO'],
-    state: 'Bekerja',
-    metrics: [
-      { label: 'Tugas dikoordinasi', value: '76' },
-      { label: 'Tepat waktu', value: '93%' },
-      { label: 'Eskalasi ke CEO', value: '6' },
-    ],
-    memory: ['Eskalasi hanya untuk tindakan sensitif', 'Rapat mingguan: Senin pagi'],
   },
 ]
 

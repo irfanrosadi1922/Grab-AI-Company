@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ClipboardPlus, Download, Mic, MicOff, PhoneOff, Play, Plus, Send, Sparkles, Square, Video, VideoOff } from 'lucide-react'
-import { Avatar, Badge, Button, Card, DemoTag, EmptyState, Input, Notice, PageHeader, Select, Tabs, Textarea } from '../components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Input, Notice, PageHeader, Select, Tabs, Textarea } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
 import { AssignTaskModal } from './Employees'
 import { EMP } from '../data/employees'
@@ -39,12 +39,6 @@ const TYPES: { id: MeetingType; label: string; people: EmployeeId[]; agenda: str
     people: ['james', 'william', 'daniel', 'ethan'],
     agenda: ['Insiden yang terjadi', 'Dampak ke toko', 'Tindakan segera'],
   },
-]
-
-const SAMPLE_TRANSCRIPT: { who: EmployeeId; text: string }[] = [
-  { who: 'james', text: 'Selamat pagi. Kita mulai dari ringkasan prioritas minggu ini.' },
-  { who: 'daniel', text: 'Saya akan paparkan perbandingan antar toko begitu data nyata tersambung.' },
-  { who: 'sophia', text: 'Usulan kampanye akhir pekan menunggu persetujuan anggaran.' },
 ]
 
 type Panel = 'chat' | 'agenda' | 'transcript' | 'minutes' | 'decisions' | 'tasks'
@@ -220,10 +214,7 @@ export default function Meeting() {
                   {speaker === 'james' && ' · Moderator'}
                 </p>
               </div>
-              <p className="flex items-center gap-1.5 text-xs text-mute">
-                Pembicara dipilih manual
-                <DemoTag />
-              </p>
+              <p className="text-xs text-mute">Pembicara dipilih manual</p>
             </div>
 
             {type === 'private' && (
@@ -369,22 +360,10 @@ export default function Meeting() {
             )}
 
             {panel === 'transcript' && (
-              <div className="space-y-3">
-                <p className="flex items-center gap-2 text-xs text-mute">
-                  <DemoTag /> Contoh format transkrip. Transkrip langsung belum aktif.
-                </p>
-                <ul className="space-y-3">
-                  {SAMPLE_TRANSCRIPT.map((l, i) => (
-                    <li key={i} className="flex gap-3">
-                      <Avatar id={l.who} size={28} />
-                      <div>
-                        <p className="text-xs font-semibold">{EMP[l.who].name}</p>
-                        <p className="text-[13px] text-mute">{l.text}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <EmptyState
+                title="Transkrip langsung belum aktif"
+                desc="Butuh layanan suara dan backend yang belum dibangun. Gunakan tab Chat untuk berdiskusi tertulis dan Notulen untuk mencatat."
+              />
             )}
 
             {panel === 'minutes' && (

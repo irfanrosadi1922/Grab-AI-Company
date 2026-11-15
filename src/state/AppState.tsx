@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Approval, Asset, EmployeeId, Store, Task, TaskStatus } from '../types'
-import { SEED_APPROVALS, SEED_ASSETS, SEED_STORES, SEED_TASKS } from '../data/seed'
-import { nowStamp } from '../lib/format'
+import type { Approval, Asset, Entries, EntryKind, EntryOf, EmployeeId, Store, Task, TaskStatus } from '../types'
+import { newId, nowStamp } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { loadRemote, saveRemote } from '../lib/remote'
 
@@ -19,7 +18,12 @@ export interface Settings {
   notify: Record<string, boolean>
   needApproval: Record<string, boolean>
   employeeEnabled: Record<EmployeeId, boolean>
+  /** Catatan CEO per karyawan AI. Dikirim sebagai konteks saat chat. */
+  notes: Record<EmployeeId, string>
 }
+
+const ALL_IDS: EmployeeId[] = ['alex', 'daniel', 'sophia', 'olivia', 'ethan', 'isabella', 'william', 'james']
+const byId = <T,>(v: T) => Object.fromEntries(ALL_IDS.map((i) => [i, v])) as Record<EmployeeId, T>
 
 export const DEFAULT_SETTINGS: Settings = {
   ceoName: 'CEO',
@@ -39,16 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
     'Publikasi materi promosi': true,
     'Ubah status toko': true,
   },
-  employeeEnabled: {
-    alex: true,
-    daniel: true,
-    sophia: true,
-    olivia: true,
-    ethan: true,
-    isabella: true,
-    william: true,
-    james: true,
-  },
+  employeeEnabled: byId(true),
+  notes: byId(''),
 }
 
 export type ToastTone = 'success' | 'error' | 'info'
@@ -58,7 +54,7 @@ interface ToastItem {
   tone: ToastTone
 }
 
-export type SyncState = 'local' | 'saving' | 'saved' | 'error'
+export type SyncState = 'local' | 'saving' | 'saved' | 'error' | 'loadError'
 
 interface Ctx {
   ready: boolean
@@ -66,13 +62,19 @@ interface Ctx {
   userId?: string
   tasks: Task[]
   addTask: (t: Omit<Task, 'id' | 'history' | 'status'> & { status?: TaskStatus }, by?: string) => Task
+  removeTask: (id: string) => void
   setTaskStatus: (id: string, status: TaskStatus, note?: string) => void
   setTaskResult: (id: string, result: string) => void
   approvals: Approval[]
+  addApproval: (a: Pick<Approval, 'title' | 'requestedBy' | 'category' | 'summary' | 'recommendation' | 'risk'>) => void
   decide: (id: string, decision: 'Approved' | 'Rejected', reason?: string) => void
   stores: Store[]
   addStore: (s: Pick<Store, 'name' | 'city' | 'merchantId'>) => void
+  removeStore: (id: string) => void
   toggleStoreOpen: (id: string) => void
+  entries: Entries
+  addEntry: <K extends EntryKind>(kind: K, e: Omit<EntryOf<K>, 'id'>) => void
+  removeEntry: (kind: EntryKind, id: string) => void
   assets: Asset[]
   addAsset: (a: Omit<Asset, 'id' | 'createdAt'>) => void
   removeAsset: (id: string) => void
@@ -81,58 +83,67 @@ interface Ctx {
   toasts: ToastItem[]
   toast: (msg: string, tone?: ToastTone) => void
   dismissToast: (id: number) => void
-  resetDemo: () => void
+  resetAll: () => void
 }
 
 const AppCtx = createContext<Ctx | null>(null)
-const KEY = 'grab-ai-company:v1'
+const KEY = 'grab-ai-company:v2'
+
+const EMPTY_ENTRIES: Entries = { sales: [], menu: [], reviews: [], marketing: [] }
 
 interface Persisted {
   tasks: Task[]
   approvals: Approval[]
   stores: Store[]
   assets: Asset[]
+  entries: Entries
   settings: Settings
 }
 
+const emptyState = (): Persisted => ({
+  tasks: [],
+  approvals: [],
+  stores: [],
+  assets: [],
+  entries: EMPTY_ENTRIES,
+  settings: DEFAULT_SETTINGS,
+})
+
+const mergeSettings = (s?: Partial<Settings>): Settings => ({
+  ...DEFAULT_SETTINGS,
+  ...(s ?? {}),
+  notify: { ...DEFAULT_SETTINGS.notify, ...(s?.notify ?? {}) },
+  needApproval: { ...DEFAULT_SETTINGS.needApproval, ...(s?.needApproval ?? {}) },
+  employeeEnabled: { ...DEFAULT_SETTINGS.employeeEnabled, ...(s?.employeeEnabled ?? {}) },
+  notes: { ...DEFAULT_SETTINGS.notes, ...(s?.notes ?? {}) },
+})
+
 function load(): Persisted {
-  const fallback: Persisted = {
-    tasks: SEED_TASKS,
-    approvals: SEED_APPROVALS,
-    stores: SEED_STORES,
-    assets: SEED_ASSETS,
-    settings: DEFAULT_SETTINGS,
-  }
+  const fallback = emptyState()
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return fallback
     const p = JSON.parse(raw) as Partial<Persisted>
     return {
-      tasks: p.tasks ?? fallback.tasks,
-      approvals: p.approvals ?? fallback.approvals,
-      stores: p.stores ?? fallback.stores,
-      assets: p.assets ?? fallback.assets,
-      settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}) },
+      tasks: p.tasks ?? [],
+      approvals: p.approvals ?? [],
+      stores: p.stores ?? [],
+      assets: p.assets ?? [],
+      entries: { ...EMPTY_ENTRIES, ...(p.entries ?? {}) },
+      settings: mergeSettings(p.settings),
     }
   } catch {
     return fallback
   }
 }
 
-const seedState = (): Persisted => ({
-  tasks: SEED_TASKS,
-  approvals: SEED_APPROVALS,
-  stores: SEED_STORES,
-  assets: SEED_ASSETS,
-  settings: DEFAULT_SETTINGS,
-})
-
 export function AppStateProvider({ children, userId }: { children: ReactNode; userId?: string }) {
-  const initial = useRef(userId ? seedState() : load()).current
+  const initial = useRef(userId ? emptyState() : load()).current
   const [tasks, setTasks] = useState<Task[]>(initial.tasks)
   const [approvals, setApprovals] = useState<Approval[]>(initial.approvals)
   const [stores, setStores] = useState<Store[]>(initial.stores)
   const [assets, setAssets] = useState<Asset[]>(initial.assets)
+  const [entries, setEntries] = useState<Entries>(initial.entries)
   const [settings, setSettings] = useState<Settings>(initial.settings)
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const toastId = useRef(0)
@@ -140,8 +151,9 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
   const [ready, setReady] = useState(!userId)
   const [sync, setSync] = useState<SyncState>(userId ? 'saved' : 'local')
   const loaded = useRef(!userId)
+  const skipSave = useRef(false)
 
-  // Akun masuk: muat dari Supabase. Akun baru (belum ada data) memakai data contoh lalu menyimpannya.
+  // Akun masuk: muat dari Supabase. Akun baru (belum ada baris pengaturan) mulai kosong dan langsung menyimpan.
   useEffect(() => {
     if (!userId || !supabase) return
     let cancelled = false
@@ -149,19 +161,21 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       .then((r) => {
         if (cancelled) return
         if (r) {
+          skipSave.current = true // data baru saja dimuat dari server, tidak perlu ditulis balik
           setTasks(r.tasks)
           setApprovals(r.approvals)
           setStores(r.stores)
           setAssets(r.assets)
-          setSettings({ ...DEFAULT_SETTINGS, ...r.settings })
+          setEntries(r.entries)
+          setSettings(mergeSettings(r.settings))
         }
         loaded.current = true
         setReady(true)
       })
       .catch(() => {
         if (cancelled) return
-        // Gagal memuat: jangan menyimpan apa pun agar data di server tidak tertimpa data contoh.
-        setSync('error')
+        // Gagal memuat: jangan menyimpan apa pun agar data di server tidak tertimpa data kosong.
+        setSync('loadError')
         setReady(true)
       })
     return () => {
@@ -172,21 +186,25 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
   useEffect(() => {
     if (!userId) {
       try {
-        localStorage.setItem(KEY, JSON.stringify({ tasks, approvals, stores, assets, settings }))
+        localStorage.setItem(KEY, JSON.stringify({ tasks, approvals, stores, assets, entries, settings }))
       } catch {
         /* penyimpanan penuh atau diblokir: aplikasi tetap berjalan */
       }
       return
     }
-    if (!supabase || !loaded.current) return
+    if (!supabase || !ready || !loaded.current) return
+    if (skipSave.current) {
+      skipSave.current = false
+      return
+    }
     setSync('saving')
     const t = setTimeout(() => {
-      saveRemote(supabase!, userId, { tasks, approvals, stores, assets, settings })
+      saveRemote(supabase!, userId, { tasks, approvals, stores, assets, entries, settings })
         .then(() => setSync('saved'))
         .catch(() => setSync('error'))
     }, 800)
     return () => clearTimeout(t)
-  }, [userId, tasks, approvals, stores, assets, settings])
+  }, [userId, ready, tasks, approvals, stores, assets, entries, settings])
 
   const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
 
@@ -204,7 +222,7 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
     const task: Task = {
       ...t,
       status,
-      id: 'T-' + Math.floor(1000 + Math.random() * 9000),
+      id: newId('T'),
       history: [
         { at: nowStamp(), text: `Tugas dibuat oleh ${by}` },
         { at: nowStamp(), text: `Status: ${status}` },
@@ -213,6 +231,8 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
     setTasks((prev) => [task, ...prev])
     return task
   }, [])
+
+  const removeTask = useCallback((id: string) => setTasks((p) => p.filter((t) => t.id !== id)), [])
 
   const setTaskStatus = useCallback((id: string, status: TaskStatus, note?: string) => {
     setTasks((prev) =>
@@ -228,6 +248,10 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, result } : t)))
   }, [])
 
+  const addApproval: Ctx['addApproval'] = useCallback((a) => {
+    setApprovals((prev) => [{ ...a, id: newId('A'), createdAt: nowStamp() }, ...prev])
+  }, [])
+
   const decide: Ctx['decide'] = useCallback((id, decision, reason) => {
     setApprovals((prev) =>
       prev.map((a) => (a.id === id ? { ...a, decision, reason, decidedAt: nowStamp() } : a)),
@@ -237,40 +261,46 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
   const addStore: Ctx['addStore'] = useCallback((s) => {
     setStores((prev) => [
       ...prev,
-      {
-        id: 'S-' + (prev.length + 1) + Math.floor(Math.random() * 90 + 10),
-        ...s,
-        open: false,
-        connection: 'Belum terhubung',
-        lastSync: null,
-        demoSales: 0,
-        demoOrders: 0,
-        demoRating: 0,
-        demoGrowth: 0,
-      },
+      { id: newId('S'), ...s, open: false, connection: 'Belum terhubung', lastSync: null },
     ])
+  }, [])
+
+  // Menghapus toko juga menghapus penjualan dan ulasan milik toko itu agar tidak ada data yatim.
+  const removeStore = useCallback((id: string) => {
+    setStores((p) => p.filter((s) => s.id !== id))
+    setEntries((p) => ({
+      ...p,
+      sales: p.sales.filter((x) => x.storeId !== id),
+      reviews: p.reviews.filter((x) => x.storeId !== id),
+    }))
   }, [])
 
   const toggleStoreOpen = useCallback((id: string) => {
     setStores((prev) => prev.map((s) => (s.id === id ? { ...s, open: !s.open } : s)))
   }, [])
 
+  const addEntry: Ctx['addEntry'] = useCallback((kind, e) => {
+    setEntries((p) => ({ ...p, [kind]: [{ ...e, id: newId('E') }, ...p[kind]] }) as Entries)
+  }, [])
+
+  const removeEntry: Ctx['removeEntry'] = useCallback((kind, id) => {
+    setEntries((p) => ({ ...p, [kind]: (p[kind] as { id: string }[]).filter((x) => x.id !== id) }) as Entries)
+  }, [])
+
   const addAsset: Ctx['addAsset'] = useCallback((a) => {
-    setAssets((prev) => [
-      { ...a, id: 'AS-' + Math.floor(1000 + Math.random() * 9000), createdAt: nowStamp() },
-      ...prev,
-    ])
+    setAssets((prev) => [{ ...a, id: newId('AS'), createdAt: nowStamp() }, ...prev])
   }, [])
 
   const removeAsset = useCallback((id: string) => setAssets((p) => p.filter((a) => a.id !== id)), [])
 
   const updateSettings = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), [])
 
-  const resetDemo = useCallback(() => {
-    setTasks(SEED_TASKS)
-    setApprovals(SEED_APPROVALS)
-    setStores(SEED_STORES)
-    setAssets(SEED_ASSETS)
+  const resetAll = useCallback(() => {
+    setTasks([])
+    setApprovals([])
+    setStores([])
+    setAssets([])
+    setEntries(EMPTY_ENTRIES)
     setSettings(DEFAULT_SETTINGS)
   }, [])
 
@@ -281,13 +311,19 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       userId,
       tasks,
       addTask,
+      removeTask,
       setTaskStatus,
       setTaskResult,
       approvals,
+      addApproval,
       decide,
       stores,
       addStore,
+      removeStore,
       toggleStoreOpen,
+      entries,
+      addEntry,
+      removeEntry,
       assets,
       addAsset,
       removeAsset,
@@ -296,7 +332,7 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       toasts,
       toast,
       dismissToast,
-      resetDemo,
+      resetAll,
     }),
     [
       ready,
@@ -304,13 +340,19 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       userId,
       tasks,
       addTask,
+      removeTask,
       setTaskStatus,
       setTaskResult,
       approvals,
+      addApproval,
       decide,
       stores,
       addStore,
+      removeStore,
       toggleStoreOpen,
+      entries,
+      addEntry,
+      removeEntry,
       assets,
       addAsset,
       removeAsset,
@@ -319,7 +361,7 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
       toasts,
       toast,
       dismissToast,
-      resetDemo,
+      resetAll,
     ],
   )
 

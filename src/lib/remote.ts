@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Approval, Asset, Store, Task } from '../types'
+import type { Approval, Asset, Entries, Store, Task } from '../types'
 import type { Settings } from '../state/AppState'
 
 export interface Snapshot {
@@ -7,6 +7,7 @@ export interface Snapshot {
   approvals: Approval[]
   stores: Store[]
   assets: Asset[]
+  entries: Entries
   settings: Partial<Settings>
 }
 
@@ -73,10 +74,6 @@ const toStore = (r: Row): Store => ({
   open: !!r.is_open,
   connection: r.connection,
   lastSync: r.last_sync ?? null,
-  demoSales: r.demo?.sales ?? 0,
-  demoOrders: r.demo?.orders ?? 0,
-  demoRating: r.demo?.rating ?? 0,
-  demoGrowth: r.demo?.growth ?? 0,
 })
 const fromStore = (s: Store, userId: string): Row => ({
   id: s.id,
@@ -87,7 +84,6 @@ const fromStore = (s: Store, userId: string): Row => ({
   is_open: s.open,
   connection: s.connection,
   last_sync: s.lastSync,
-  demo: { sales: s.demoSales, orders: s.demoOrders, rating: s.demoRating, growth: s.demoGrowth },
 })
 
 const toAsset = (r: Row): Asset => ({
@@ -115,20 +111,36 @@ const fromAsset = (a: Asset, userId: string): Row => ({
 /** Mengembalikan null jika akun ini belum pernah menyimpan apa pun (login pertama). */
 export async function loadRemote(db: SupabaseClient, userId: string): Promise<Snapshot | null> {
   const q = (table: string) => db.from(table).select('*').eq('user_id', userId).order('created_at', { ascending: false })
-  const [t, a, s, as, st] = await Promise.all([
+  const [t, a, s, as, sa, me, re, ma, st] = await Promise.all([
     q('tasks'),
     q('approvals'),
     q('stores'),
     q('assets'),
+    q('sales_entries'),
+    q('menu_items'),
+    q('reviews'),
+    q('marketing_entries'),
     db.from('user_settings').select('data').eq('user_id', userId).maybeSingle(),
   ])
-  for (const r of [t, a, s, as, st]) if (r.error) throw r.error
+  for (const r of [t, a, s, as, sa, me, re, ma, st]) if (r.error) throw r.error
   if (!st.data) return null
   return {
     tasks: (t.data ?? []).map(toTask),
     approvals: (a.data ?? []).map(toApproval),
     stores: (s.data ?? []).map(toStore),
     assets: (as.data ?? []).map(toAsset),
+    entries: {
+      sales: (sa.data ?? []).map((r: Row) => ({
+        id: r.id,
+        date: r.entry_date,
+        storeId: r.store_id,
+        amount: Number(r.amount),
+        orders: Number(r.orders),
+      })),
+      menu: (me.data ?? []).map((r: Row) => ({ id: r.id, name: r.name, orders: Number(r.orders), revenue: Number(r.revenue) })),
+      reviews: (re.data ?? []).map((r: Row) => ({ id: r.id, storeId: r.store_id, rating: Number(r.rating), text: r.body ?? '', date: r.review_date })),
+      marketing: (ma.data ?? []).map((r: Row) => ({ id: r.id, channel: r.channel, spend: Number(r.spend), orders: Number(r.orders) })),
+    },
     settings: (st.data.data ?? {}) as Partial<Settings>,
   }
 }
@@ -147,11 +159,39 @@ async function replaceTable(db: SupabaseClient, table: string, userId: string, r
   if (error) throw error
 }
 
-export async function saveRemote(db: SupabaseClient, userId: string, s: Omit<Snapshot, 'settings'> & { settings: Settings }) {
+export async function saveRemote(
+  db: SupabaseClient,
+  userId: string,
+  s: Omit<Snapshot, 'settings'> & { settings: Settings },
+) {
   await replaceTable(db, 'tasks', userId, s.tasks.map((x) => fromTask(x, userId)))
   await replaceTable(db, 'approvals', userId, s.approvals.map((x) => fromApproval(x, userId)))
   await replaceTable(db, 'stores', userId, s.stores.map((x) => fromStore(x, userId)))
   await replaceTable(db, 'assets', userId, s.assets.map((x) => fromAsset(x, userId)))
+  await replaceTable(
+    db,
+    'sales_entries',
+    userId,
+    s.entries.sales.map((x) => ({ id: x.id, user_id: userId, entry_date: x.date, store_id: x.storeId, amount: x.amount, orders: x.orders })),
+  )
+  await replaceTable(
+    db,
+    'menu_items',
+    userId,
+    s.entries.menu.map((x) => ({ id: x.id, user_id: userId, name: x.name, orders: x.orders, revenue: x.revenue })),
+  )
+  await replaceTable(
+    db,
+    'reviews',
+    userId,
+    s.entries.reviews.map((x) => ({ id: x.id, user_id: userId, store_id: x.storeId, rating: x.rating, body: x.text, review_date: x.date })),
+  )
+  await replaceTable(
+    db,
+    'marketing_entries',
+    userId,
+    s.entries.marketing.map((x) => ({ id: x.id, user_id: userId, channel: x.channel, spend: x.spend, orders: x.orders })),
+  )
   const { error } = await db
     .from('user_settings')
     .upsert({ user_id: userId, data: s.settings, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })

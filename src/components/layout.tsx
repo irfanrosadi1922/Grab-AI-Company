@@ -92,10 +92,6 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="m-3 rounded-ctl border border-line p-3 text-xs text-mute">
-        <p className="font-medium text-ink">Mode demo</p>
-        <p className="mt-0.5">Data belum terhubung ke GrabMerchant. Angka bertanda DEMO adalah contoh.</p>
-      </div>
     </aside>
   )
 }

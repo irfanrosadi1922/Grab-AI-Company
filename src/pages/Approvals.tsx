@@ -1,12 +1,90 @@
 import { useState } from 'react'
-import { Check, Sparkles, X } from 'lucide-react'
-import { Avatar, Badge, Button, Card, EmptyState, Field, PageHeader, Tabs, Textarea } from '../components/ui'
+import { Check, Plus, Sparkles, X } from 'lucide-react'
+import { Avatar, Badge, Button, Card, EmptyState, Field, Input, PageHeader, Select, Tabs, Textarea } from '../components/ui'
 import type { Tone } from '../components/ui'
 import { ConfirmDialog, Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
-import { EMP } from '../data/employees'
+import { EMP, EMPLOYEES } from '../data/employees'
 import { aiErrorText, askEmployee } from '../lib/ai'
-import type { Approval } from '../types'
+import type { Approval, EmployeeId } from '../types'
+
+function NewApproval({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { addApproval, toast } = useApp()
+  const [title, setTitle] = useState('')
+  const [by, setBy] = useState<EmployeeId>('james')
+  const [category, setCategory] = useState('Anggaran')
+  const [summary, setSummary] = useState('')
+  const [rec, setRec] = useState('')
+  const [risk, setRisk] = useState<Approval['risk']>('Sedang')
+  const [err, setErr] = useState<Record<string, string>>({})
+
+  const submit = () => {
+    const e: Record<string, string> = {}
+    if (title.trim().length < 4) e.title = 'Judul minimal 4 karakter.'
+    if (summary.trim().length < 5) e.summary = 'Jelaskan permintaannya (min. 5 karakter).'
+    setErr(e)
+    if (Object.keys(e).length) return
+    addApproval({ title: title.trim(), requestedBy: by, category, summary: summary.trim(), recommendation: rec.trim(), risk })
+    toast('Permintaan ditambahkan.')
+    setTitle('')
+    setSummary('')
+    setRec('')
+    onClose()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Permintaan persetujuan baru"
+      footer={
+        <>
+          <Button onClick={onClose}>Batal</Button>
+          <Button variant="primary" onClick={submit}>
+            Tambah
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Judul" error={err.title}>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Contoh: Anggaran promo akhir pekan" maxLength={100} />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Diajukan oleh">
+            <Select value={by} onChange={(e) => setBy(e.target.value as EmployeeId)}>
+              {EMPLOYEES.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} · {e.short}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Kategori">
+            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {['Anggaran', 'Harga', 'Komunikasi pelanggan', 'Materi promosi', 'Status toko', 'Lainnya'].map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <Field label="Risiko">
+          <Select value={risk} onChange={(e) => setRisk(e.target.value as Approval['risk'])}>
+            <option>Rendah</option>
+            <option>Sedang</option>
+            <option>Tinggi</option>
+          </Select>
+        </Field>
+        <Field label="Ringkasan" error={err.summary}>
+          <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={600} />
+        </Field>
+        <Field label="Rekomendasi (opsional)" hint="Bisa dikosongkan, lalu minta tinjauan AI setelah permintaan dibuat.">
+          <Textarea value={rec} onChange={(e) => setRec(e.target.value)} maxLength={600} />
+        </Field>
+      </div>
+    </Modal>
+  )
+}
 
 const riskTone: Record<Approval['risk'], Tone> = { Rendah: 'brand', Sedang: 'warn', Tinggi: 'danger' }
 
@@ -142,6 +220,7 @@ export default function Approvals() {
   const { approvals } = useApp()
   const [tab, setTab] = useState<'pending' | 'history'>('pending')
   const [sel, setSel] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
   const pending = approvals.filter((a) => !a.decision)
   const history = approvals.filter((a) => a.decision)
   const list = tab === 'pending' ? pending : history
@@ -149,7 +228,15 @@ export default function Approvals() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Approval Center" desc="Tindakan sensitif menunggu keputusan CEO sebelum dijalankan." />
+      <PageHeader
+        title="Approval Center"
+        desc="Tindakan sensitif menunggu keputusan CEO sebelum dijalankan."
+        actions={
+          <Button variant="primary" icon={Plus} onClick={() => setCreating(true)}>
+            Permintaan baru
+          </Button>
+        }
+      />
       <Tabs
         value={tab}
         onChange={setTab}
@@ -188,6 +275,7 @@ export default function Approvals() {
         )}
       </Card>
       {selected && <Review a={selected} onClose={() => setSel(null)} />}
+      <NewApproval open={creating} onClose={() => setCreating(false)} />
     </div>
   )
 }

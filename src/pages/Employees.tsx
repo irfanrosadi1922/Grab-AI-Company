@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ClipboardPlus, MessageSquare, Send } from 'lucide-react'
-import { Avatar, Badge, Button, Card, DemoTag, EmptyState, Field, Input, Notice, PageHeader, SearchInput, Select, Tabs, Textarea } from '../components/ui'
+import { Avatar, Badge, Button, Card, EmptyState, Field, Input, Notice, PageHeader, SearchInput, Select, Tabs, Textarea } from '../components/ui'
 import { Modal } from '../components/Overlays'
 import { useApp } from '../state/AppState'
 import { EMPLOYEES, EMP } from '../data/employees'
@@ -9,8 +9,9 @@ import type { EmployeeId, Priority } from '../types'
 import { aiErrorText, askEmployee } from '../lib/ai'
 import type { Msg } from '../lib/ai'
 import { StatusBadge } from '../components/ui'
+import { employeeStats, workState } from '../lib/work'
 
-const stateTone = { Bekerja: 'brand', Siaga: 'warn', 'Dalam rapat': 'info', Nonaktif: 'neutral' } as const
+const stateTone = { Bekerja: 'brand', Siaga: 'warn', Nonaktif: 'neutral' } as const
 
 export function AssignTaskModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: EmployeeId }) {
   const { addTask, toast, settings } = useApp()
@@ -115,7 +116,11 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
     setText('')
     setBusy(true)
     try {
-      const reply = await askEmployee(id, history, { model: settings.model })
+      const note = settings.notes[id]?.trim()
+      const reply = await askEmployee(id, history, {
+        model: settings.model,
+        context: note ? `Catatan CEO untuk kamu (preferensi dan hal yang perlu diingat): ${note}` : undefined,
+      })
       setMsgs((m) => [...m, { from: 'ai', text: reply }])
     } catch (err) {
       setMsgs((m) => [...m, { from: 'sys', text: aiErrorText(err) }])
@@ -162,10 +167,13 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
 }
 
 function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: () => void; onAssign: () => void; onChat: () => void }) {
-  const { tasks } = useApp()
+  const { tasks, settings, updateSettings, toast } = useApp()
   const e = EMP[id]
   const [tab, setTab] = useState<'info' | 'tasks' | 'memory'>('info')
   const mine = tasks.filter((t) => t.assignee === id)
+  const st = workState(id, tasks, settings.employeeEnabled[id])
+  const stats = employeeStats(id, tasks)
+  const [note, setNote] = useState(settings.notes[id] ?? '')
   return (
     <Modal
       open
@@ -188,8 +196,7 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
         <div className="min-w-0">
           <p className="font-semibold">{e.role}</p>
           <div className="mt-1 flex items-center gap-2">
-            <Badge tone={stateTone[e.state]}>{e.state}</Badge>
-            <DemoTag />
+            <Badge tone={stateTone[st]}>{st}</Badge>
           </div>
         </div>
       </div>
@@ -200,7 +207,7 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
         items={[
           { id: 'info', label: 'Ringkasan' },
           { id: 'tasks', label: 'Riwayat tugas', count: mine.length },
-          { id: 'memory', label: 'Memori' },
+          { id: 'memory', label: 'Catatan' },
         ]}
       />
       {tab === 'info' && (
@@ -218,10 +225,14 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
             </ul>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {e.metrics.map((m) => (
-              <div key={m.label} className="rounded-ctl border border-line p-3">
-                <p className="tabular text-lg font-bold">{m.value}</p>
-                <p className="text-xs text-mute">{m.label}</p>
+            {[
+              ['Tugas selesai', stats.done],
+              ['Sedang berjalan', stats.active],
+              ['Gagal', stats.failed],
+            ].map(([k, v]) => (
+              <div key={k} className="rounded-ctl border border-line p-3">
+                <p className="tabular text-lg font-bold">{v}</p>
+                <p className="text-xs text-mute">{k}</p>
               </div>
             ))}
           </div>
@@ -245,14 +256,18 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
       )}
       {tab === 'memory' && (
         <div className="mt-4 space-y-3">
-          <ul className="space-y-2">
-            {e.memory.map((m) => (
-              <li key={m} className="rounded-ctl border border-line px-3 py-2 text-[13px]">
-                {m}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-mute">Contoh memori. Penyimpanan memori AI sungguhan belum diimplementasikan.</p>
+          <Field label={`Catatan untuk ${e.name}`} hint="Preferensi atau hal yang perlu diingat. Dikirim sebagai konteks saat Anda chat dengan karyawan ini.">
+            <Textarea value={note} onChange={(ev) => setNote(ev.target.value)} maxLength={600} placeholder="Contoh: Gaya bahasa santai, hindari kata 'murah'." />
+          </Field>
+          <Button
+            variant="primary"
+            onClick={() => {
+              updateSettings({ notes: { ...settings.notes, [id]: note.trim() } })
+              toast('Catatan disimpan.')
+            }}
+          >
+            Simpan catatan
+          </Button>
         </div>
       )}
     </Modal>
@@ -260,7 +275,7 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
 }
 
 export default function Employees() {
-  const { settings } = useApp()
+  const { settings, tasks } = useApp()
   const [q, setQ] = useState('')
   const [state, setState] = useState('all')
   const [params, setParams] = useSearchParams()
@@ -271,23 +286,24 @@ export default function Employees() {
   const list = useMemo(
     () =>
       EMPLOYEES.filter(
-        (e) => (e.name + e.role).toLowerCase().includes(q.toLowerCase()) && (state === 'all' || e.state === state),
+        (e) =>
+          (e.name + e.role).toLowerCase().includes(q.toLowerCase()) &&
+          (state === 'all' || workState(e.id, tasks, settings.employeeEnabled[e.id]) === state),
       ),
-    [q, state],
+    [q, state, tasks, settings.employeeEnabled],
   )
 
   const close = () => setParams({}, { replace: true })
 
   return (
     <div>
-      <PageHeader title="AI Employees" desc="Delapan karyawan AI dengan peran masing-masing. Status dan metrik di halaman ini masih data contoh." />
+      <PageHeader title="AI Employees" desc="Delapan karyawan AI dengan peran masing-masing. Status dan statistik dihitung dari tugas yang Anda berikan." />
       <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_200px]">
         <SearchInput value={q} onChange={setQ} placeholder="Cari nama atau jabatan" />
         <Select aria-label="Filter status" value={state} onChange={(e) => setState(e.target.value)}>
           <option value="all">Semua status</option>
           <option>Bekerja</option>
           <option>Siaga</option>
-          <option>Dalam rapat</option>
           <option>Nonaktif</option>
         </Select>
       </div>
@@ -299,7 +315,7 @@ export default function Employees() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {list.map((e) => {
-            const enabled = settings.employeeEnabled[e.id]
+            const st = workState(e.id, tasks, settings.employeeEnabled[e.id])
             return (
               <Card key={e.id} className="flex flex-col p-4">
                 <button className="flex items-center gap-3 text-left" onClick={() => setParams({ open: e.id })}>
@@ -311,7 +327,7 @@ export default function Employees() {
                 </button>
                 <p className="mt-3 line-clamp-3 flex-1 text-[13px] text-mute">{e.summary}</p>
                 <div className="mt-3">
-                  <Badge tone={enabled ? stateTone[e.state] : 'neutral'}>{enabled ? e.state : 'Nonaktif'}</Badge>
+                  <Badge tone={stateTone[st]}>{st}</Badge>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button size="sm" icon={MessageSquare} onClick={() => setChat(e.id)}>

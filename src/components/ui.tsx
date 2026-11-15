@@ -60,29 +60,14 @@ export function Card({ className, children }: { className?: string; children: Re
   return <section className={cn('rounded-card border border-line bg-surface shadow-card', className)}>{children}</section>
 }
 
-export function CardHeader({ title, aside, demo }: { title: string; aside?: ReactNode; demo?: boolean }) {
+export function CardHeader({ title, aside }: { title: string; aside?: ReactNode }) {
   return (
     <header className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
       <div className="flex min-w-0 items-center gap-2">
         <h2 className="truncate text-sm font-semibold">{title}</h2>
-        {demo && <DemoTag />}
       </div>
       {aside}
     </header>
-  )
-}
-
-export function DemoTag({ className }: { className?: string }) {
-  return (
-    <span
-      title="Data contoh. Belum terhubung ke sumber data nyata."
-      className={cn(
-        'inline-flex shrink-0 items-center rounded-md border border-warn/40 px-1.5 py-px font-mono text-[10px] font-medium uppercase tracking-wide text-warn',
-        className,
-      )}
-    >
-      Demo
-    </span>
   )
 }
 
@@ -321,7 +306,7 @@ export function PageLoading() {
 }
 
 /* ---------- Stat ---------- */
-export function Stat({ label, value, note, icon: Icon, demo }: { label: string; value: ReactNode; note?: string; icon: LucideIcon; demo?: boolean }) {
+export function Stat({ label, value, note, icon: Icon }: { label: string; value: ReactNode; note?: string; icon: LucideIcon }) {
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between">
@@ -331,7 +316,6 @@ export function Stat({ label, value, note, icon: Icon, demo }: { label: string; 
       <div className="tabular mt-2 text-2xl font-bold tracking-tight">{value}</div>
       <div className="mt-1 flex items-center gap-2 text-xs text-mute">
         {note}
-        {demo && <DemoTag />}
       </div>
     </Card>
   )

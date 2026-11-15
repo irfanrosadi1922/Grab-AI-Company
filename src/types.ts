@@ -8,7 +8,8 @@ export type EmployeeId =
   | 'william'
   | 'james'
 
-export type WorkState = 'Bekerja' | 'Siaga' | 'Dalam rapat' | 'Nonaktif'
+// Status dihitung dari tugas yang sebenarnya, bukan diisi manual.
+export type WorkState = 'Bekerja' | 'Siaga' | 'Nonaktif'
 
 export interface Employee {
   id: EmployeeId
@@ -18,9 +19,6 @@ export interface Employee {
   hue: number
   summary: string
   duties: string[]
-  state: WorkState
-  metrics: { label: string; value: string }[]
-  memory: string[]
 }
 
 export type TaskStatus =
@@ -75,10 +73,6 @@ export interface Store {
   open: boolean
   connection: ConnectionState
   lastSync: string | null
-  demoSales: number
-  demoOrders: number
-  demoRating: number
-  demoGrowth: number
 }
 
 export interface Asset {
@@ -91,3 +85,43 @@ export interface Asset {
   accent: string
   createdAt: string
 }
+
+/* Data yang diisi sendiri oleh CEO (belum ada integrasi GrabMerchant) */
+export interface SaleEntry {
+  id: string
+  date: string // YYYY-MM-DD
+  storeId: string
+  amount: number // Rupiah
+  orders: number
+}
+
+export interface MenuItem {
+  id: string
+  name: string
+  orders: number
+  revenue: number
+}
+
+export interface Review {
+  id: string
+  storeId: string
+  rating: number // 1-5
+  text: string
+  date: string
+}
+
+export interface MarketingEntry {
+  id: string
+  channel: string
+  spend: number
+  orders: number
+}
+
+export interface Entries {
+  sales: SaleEntry[]
+  menu: MenuItem[]
+  reviews: Review[]
+  marketing: MarketingEntry[]
+}
+export type EntryKind = keyof Entries
+export type EntryOf<K extends EntryKind> = Entries[K][number]

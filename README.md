@@ -11,28 +11,24 @@ npm run dev        # pengembangan
 npm run build      # typecheck + build produksi
 ```
 
-## Status jujur
+## Status
 
-**Sudah berfungsi (disimpan di localStorage browser):**
-- Navigasi 10 halaman, sidebar desktop, bottom nav + menu More di mobile, pencarian global, notifikasi
-- Task Center: daftar, kanban, buat tugas, ubah status, hasil, riwayat
-- Approval Center: setujui (dengan konfirmasi), tolak (alasan wajib), riwayat
-- Marketing Studio: desain dari template, simpan ke Aset, unduh SVG/PNG, caption berbasis template
-- Grab Stores: daftar, tambah toko, detail; Reports: buat laporan dan unduh CSV
-- Meeting Room: agenda, chat, notulen (unduh .txt), log keputusan, penugasan
-- Settings: profil, perusahaan, toggle karyawan, izin, notifikasi, reset data
+Semua data diisi sendiri oleh CEO. Tidak ada data contoh.
 
-**Masih demo / belum diimplementasikan:**
-- Semua angka penjualan, grafik, ulasan, performa menu dan toko (ditandai DEMO)
-- Koneksi GrabMerchant: tidak ada, tidak ada koneksi palsu. Butuh akses API resmi
-- Respons AI, percakapan dengan karyawan AI, transkrip langsung, suara dua arah
-- Avatar: saat ini inisial berwarna. Foto realistis belum ada, perlu aset gambar
-- Backend Supabase, autentikasi, dan penyimpanan lintas perangkat
+**Berfungsi:**
+- Login (Supabase Auth) dan sinkronisasi data per akun dengan RLS
+- Task Center, Approval Center (buat permintaan, setujui/tolak), Grab Stores (tambah/hapus toko)
+- Analytics, Dashboard, dan Reports dihitung dari penjualan, menu, ulasan, dan pemasaran yang Anda catat
+- Chat AI dengan karyawan, tinjauan persetujuan, ringkasan notulen, dan teks promosi lewat Edge Function `ai-chat` (Groq)
+- Marketing Studio: desain dari template, ekspor SVG/PNG, library aset
 
-## Langkah berikutnya
+**Belum ada:**
+- Koneksi GrabMerchant (butuh akses API resmi). Sementara itu penjualan dicatat manual
+- Suara dua arah dan transkrip langsung (ElevenLabs belum dibangun)
+- Avatar foto realistis (saat ini inisial berwarna)
 
-1. `npm install && npm run build`, perbaiki error yang muncul
-2. Tambah aset avatar yang konsisten
-3. Supabase: autentikasi, tabel tugas/persetujuan/toko, RLS
-4. Edge Function untuk penyedia model AI (kunci hanya di sisi server)
-5. Integrasi GrabMerchant setelah akses resmi diperoleh
+## Pengaturan
+
+1. Variabel build `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` (kunci publishable, aman di browser)
+2. Secret Supabase `GROQ_API_KEY` untuk Edge Function `ai-chat`
+3. Skema database di `supabase/migrations/`

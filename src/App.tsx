@@ -36,7 +36,16 @@ class Boundary extends Component<{ children: ReactNode }, { error: Error | null 
 }
 
 export default function App() {
-  const { ready } = useApp()
+  const { ready, sync } = useApp()
+  if (ready && sync === 'loadError') {
+    return (
+      <ErrorState
+        title="Data tidak bisa dimuat dari Supabase"
+        desc="Tidak ada yang disimpan atau ditimpa. Periksa koneksi internet lalu coba lagi."
+        onRetry={() => window.location.reload()}
+      />
+    )
+  }
   if (!ready) {
     return (
       <div className="p-6">

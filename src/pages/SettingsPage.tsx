@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge, Button, Card, CardHeader, Field, Input, Notice, PageHeader, Select, Toggle } from '../components/ui'
 import type { Tone } from '../components/ui'
 import { ConfirmDialog } from '../components/Overlays'
@@ -35,7 +35,7 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
 }
 
 export default function SettingsPage() {
-  const { settings, updateSettings, toast, resetDemo, sync } = useApp()
+  const { settings, updateSettings, toast, resetAll, sync } = useApp()
   const { user, signOut, enabled } = useAuth()
   const [sec, setSec] = useState<Sec>('ceo')
   const [name, setName] = useState(settings.ceoName)
@@ -77,12 +77,41 @@ export default function SettingsPage() {
     toast('Pengaturan perusahaan disimpan.')
   }
 
-  const integ: { name: string; note: string; state: string; tone: Tone }[] = [
-    { name: 'GrabMerchant', note: 'Butuh akses API resmi.', state: 'Belum terhubung', tone: 'neutral' },
-    { name: 'Supabase', note: 'Database dan Edge Functions.', state: 'Belum terhubung', tone: 'neutral' },
-    { name: settings.provider, note: 'Penyedia model AI.', state: 'Belum terhubung', tone: 'neutral' },
-    { name: settings.voiceProvider, note: 'Suara karyawan AI.', state: 'Belum terhubung', tone: 'neutral' },
-  ]
+  type GroqState = 'idle' | 'checking' | 'ok' | 'nokey' | 'rejected' | 'error'
+  const [groq, setGroq] = useState<GroqState>('idle')
+  const [groqModel, setGroqModel] = useState('')
+  const [groqErr, setGroqErr] = useState('')
+
+  const checkGroq = async () => {
+    setGroq('checking')
+    setGroqErr('')
+    try {
+      const r = await checkAi()
+      if (!r.configured) setGroq('nokey')
+      else if (!r.valid) setGroq('rejected')
+      else {
+        setGroqModel(r.model ?? '')
+        setGroq('ok')
+      }
+    } catch (e) {
+      setGroqErr(aiErrorText(e))
+      setGroq('error')
+    }
+  }
+
+  useEffect(() => {
+    if (sec === 'integ' && user) void checkGroq()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sec, user?.id])
+
+  const groqBadge: Record<GroqState, { label: string; tone: Tone }> = {
+    idle: { label: 'Belum diperiksa', tone: 'neutral' },
+    checking: { label: 'Memeriksa...', tone: 'neutral' },
+    ok: { label: 'Terhubung', tone: 'brand' },
+    nokey: { label: 'Kunci belum dipasang', tone: 'warn' },
+    rejected: { label: 'Kunci ditolak', tone: 'danger' },
+    error: { label: 'Tidak bisa diperiksa', tone: 'danger' },
+  }
 
   return (
     <div>
@@ -248,15 +277,42 @@ export default function SettingsPage() {
             )}
 
             {sec === 'integ' && (
-              <ul>
-                {integ.map((i) => (
-                  <li key={i.name}>
-                    <Row title={i.name} desc={i.note}>
-                      <Badge tone={i.tone}>{i.state}</Badge>
-                    </Row>
-                  </li>
-                ))}
-              </ul>
+              <div>
+                <Row title="Supabase" desc={enabled && user ? `Login sebagai ${user.email ?? 'akun Anda'}. Data tersimpan di database.` : 'Variabel VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY belum diisi.'}>
+                  <Badge tone={enabled && user ? (sync === 'error' ? 'danger' : 'brand') : 'neutral'}>
+                    {enabled && user ? (sync === 'error' ? 'Gagal menyimpan' : 'Terhubung') : 'Belum dikonfigurasi'}
+                  </Badge>
+                </Row>
+                <Row
+                  title="Groq (model AI)"
+                  desc={
+                    groq === 'ok'
+                      ? `Model bawaan server: ${groqModel}`
+                      : groq === 'nokey'
+                        ? 'Tambahkan secret GROQ_API_KEY di Supabase: Edge Functions, Secrets.'
+                        : groq === 'rejected'
+                          ? 'Kunci terpasang tetapi ditolak Groq. Periksa kuncinya.'
+                          : groq === 'error'
+                            ? groqErr
+                            : 'Dipakai untuk chat dan fitur AI.'
+                  }
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge tone={groqBadge[groq].tone}>{groqBadge[groq].label}</Badge>
+                    {user && groq !== 'checking' && (
+                      <Button size="sm" onClick={() => void checkGroq()}>
+                        Periksa
+                      </Button>
+                    )}
+                  </div>
+                </Row>
+                <Row title={settings.voiceProvider} desc="Suara karyawan AI. Fitur suara belum dibangun.">
+                  <Badge>Belum diimplementasikan</Badge>
+                </Row>
+                <Row title="GrabMerchant" desc="Butuh akses API resmi dari GrabMerchant. Sampai itu ada, catat penjualan manual di Analytics.">
+                  <Badge tone="warn">Butuh akses resmi</Badge>
+                </Row>
+              </div>
             )}
 
             {sec === 'security' && (
@@ -275,9 +331,9 @@ export default function SettingsPage() {
                 ) : (
                   <Notice tone="info">Mode lokal: Supabase belum dikonfigurasi, data tersimpan di browser ini saja.</Notice>
                 )}
-                <Row title="Reset data demo" desc="Mengembalikan tugas, persetujuan, toko, aset, dan pengaturan ke kondisi awal.">
+                <Row title="Hapus semua data" desc="Menghapus tugas, persetujuan, toko, data analitik, aset, catatan, dan pengaturan dari akun ini.">
                   <Button variant="danger" onClick={() => setReset(true)}>
-                    Reset
+                    Hapus
                   </Button>
                 </Row>
               </div>
@@ -288,16 +344,16 @@ export default function SettingsPage() {
       <ConfirmDialog
         open={reset}
         onClose={() => setReset(false)}
-        title="Reset semua data demo?"
-        desc="Perubahan yang Anda buat akan hilang dan tidak bisa dikembalikan."
-        confirmLabel="Reset"
+        title="Hapus semua data?"
+        desc="Seluruh data Anda di akun ini akan terhapus permanen dan tidak bisa dikembalikan."
+        confirmLabel="Hapus semua"
         danger
         onConfirm={() => {
-          resetDemo()
+          resetAll()
           setName('CEO')
           setEmail('')
           setCompany('Grab AI Company')
-          toast('Data dikembalikan ke kondisi awal.', 'info')
+          toast('Semua data dihapus.', 'info')
         }}
       />
     </div>
