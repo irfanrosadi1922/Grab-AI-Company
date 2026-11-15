@@ -22,6 +22,29 @@ body,
   height: 100%;
 }
 
+/* Perilaku seperti aplikasi: tanpa zoom cubit, tanpa seleksi teks, tanpa menu tekan-lama */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+body,
+body * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 body {
   margin: 0;
   background: rgb(var(--canvas));
