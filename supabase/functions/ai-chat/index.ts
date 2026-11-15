@@ -25,26 +25,43 @@ const json = (b: unknown, status = 200) =>
 const GROQ = 'https://api.groq.com/openai/v1'
 
 // Hanya akun yang sudah login yang boleh memakai fungsi ini (kunci publik saja tidak cukup).
-async function isSignedIn(req: Request): Promise<boolean> {
+async function signedInUser(req: Request): Promise<string | null> {
   const auth = req.headers.get('Authorization') ?? ''
   const url = Deno.env.get('SUPABASE_URL')
   const anon = Deno.env.get('SUPABASE_ANON_KEY')
-  if (!auth.startsWith('Bearer ') || !url || !anon) return false
+  if (!auth.startsWith('Bearer ') || !url || !anon) return null
   try {
     const r = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: auth, apikey: anon }, signal: AbortSignal.timeout(8000) })
-    if (!r.ok) return false
+    if (!r.ok) return null
     const u = await r.json()
-    return typeof u?.id === 'string'
+    return typeof u?.id === 'string' ? u.id : null
   } catch {
-    return false
+    return null
+  }
+}
+
+// Kunci API milik karyawan ini (diisi CEO di aplikasi). Dibaca dengan service role; tidak pernah dikirim balik ke browser.
+async function employeeKey(userId: string, employee: string): Promise<string | null> {
+  const url = Deno.env.get('SUPABASE_URL')
+  const svc = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!url || !svc) return null
+  try {
+    const q = `user_id=eq.${encodeURIComponent(userId)}&employee=eq.${encodeURIComponent(employee)}&select=api_key`
+    const r = await fetch(`${url}/rest/v1/employee_keys?${q}`, { headers: { apikey: svc, Authorization: `Bearer ${svc}` }, signal: AbortSignal.timeout(8000) })
+    if (!r.ok) return null
+    const rows = await r.json()
+    return typeof rows?.[0]?.api_key === 'string' && rows[0].api_key ? rows[0].api_key : null
+  } catch {
+    return null
   }
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (!(await isSignedIn(req))) return json({ error: 'unauthorized' }, 401)
+  const userId = await signedInUser(req)
+  if (!userId) return json({ error: 'unauthorized' }, 401)
 
-  const key = Deno.env.get('GROQ_API_KEY')
+  let key = Deno.env.get('GROQ_API_KEY')
   const defaultModel = Deno.env.get('GROQ_MODEL') ?? 'llama-3.3-70b-versatile'
 
   // deno-lint-ignore no-explicit-any
@@ -57,6 +74,7 @@ Deno.serve(async (req: Request) => {
 
   // Cek koneksi: apakah kunci terpasang dan valid, plus daftar model yang tersedia.
   if (body?.ping) {
+    if (typeof body.employee === 'string' && EMP[body.employee]) key = (await employeeKey(userId, body.employee)) ?? key
     if (!key) return json({ configured: false })
     try {
       const r = await fetch(`${GROQ}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10000) })
@@ -70,10 +88,11 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  if (!key) return json({ error: 'not_configured' }, 503)
-
   const e = EMP[String(body?.employee)]
   if (!e) return json({ error: 'bad_employee' }, 400)
+  // Kunci khusus karyawan didahulukan; jika tidak ada, pakai kunci bersama (secret GROQ_API_KEY).
+  key = (await employeeKey(userId, String(body.employee))) ?? key
+  if (!key) return json({ error: 'not_configured' }, 503)
 
   const raw = Array.isArray(body?.messages) ? body.messages : []
   const messages = raw

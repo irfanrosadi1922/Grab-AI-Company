@@ -9,6 +9,7 @@ import type { ChatMsg, EmployeeId, Priority } from '../types'
 import { aiErrorText, askEmployee } from '../lib/ai'
 import type { Msg } from '../lib/ai'
 import { StatusBadge } from '../components/ui'
+import { loadKeyInfo, removeKey, saveKey } from '../lib/keys'
 import { employeeStats, workState } from '../lib/work'
 
 const stateTone = { Bekerja: 'brand', Siaga: 'warn', Nonaktif: 'neutral' } as const
@@ -172,10 +173,97 @@ function ChatDrawer({ id, onClose }: { id: EmployeeId | null; onClose: () => voi
   )
 }
 
+function KeyTab({ id }: { id: EmployeeId }) {
+  const { userId, toast } = useApp()
+  const e = EMP[id]
+  const [last4, setLast4] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [val, setVal] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let off = false
+    loadKeyInfo()
+      .then((m) => !off && setLast4(m[id] ?? null))
+      .catch(() => undefined)
+      .finally(() => !off && setLoading(false))
+    return () => {
+      off = true
+    }
+  }, [id])
+
+  if (!userId) return <Notice tone="info">Masuk dengan akun dulu untuk menyimpan kunci API.</Notice>
+
+  const save = async () => {
+    const k = val.trim()
+    if (k.length < 20 || /\s/.test(k)) return setErr('Kunci tidak valid. Tempel kunci lengkap tanpa spasi.')
+    setErr('')
+    setBusy(true)
+    try {
+      await saveKey(userId, id, k)
+      setLast4(k.slice(-4))
+      setVal('')
+      toast(`Kunci ${e.name} disimpan.`)
+    } catch {
+      toast('Gagal menyimpan kunci. Coba lagi.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async () => {
+    setBusy(true)
+    try {
+      await removeKey(userId, id)
+      setLast4(null)
+      toast('Kunci dihapus. Kembali memakai kunci bersama.', 'info')
+    } catch {
+      toast('Gagal menghapus kunci.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <p className="text-[13px] text-mute">
+        Kunci API Groq khusus untuk {e.name}. Jika kosong, {e.name} memakai kunci bersama dari Supabase. Kunci tersimpan di akun Anda dan hanya dipakai server; setelah disimpan, aplikasi tidak bisa menampilkannya lagi.
+      </p>
+      <div className="flex items-center gap-2 text-[13px]">
+        <Badge tone={last4 ? 'brand' : 'neutral'}>{loading ? 'Memeriksa...' : last4 ? 'Kunci khusus terpasang' : 'Memakai kunci bersama'}</Badge>
+        {last4 && <span className="tabular font-mono text-xs text-mute">••••{last4}</span>}
+      </div>
+      <Field label={last4 ? 'Ganti kunci API' : 'Kunci API'} error={err}>
+        <Input
+          type="password"
+          value={val}
+          onChange={(ev) => setVal(ev.target.value)}
+          placeholder="gsk_..."
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          maxLength={200}
+        />
+      </Field>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={() => void save()} disabled={busy || !val.trim()}>
+          Simpan kunci
+        </Button>
+        {last4 && (
+          <Button variant="danger" onClick={() => void remove()} disabled={busy}>
+            Hapus kunci
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: () => void; onAssign: () => void; onChat: () => void }) {
   const { tasks, settings, updateSettings, toast } = useApp()
   const e = EMP[id]
-  const [tab, setTab] = useState<'info' | 'tasks' | 'memory'>('info')
+  const [tab, setTab] = useState<'info' | 'tasks' | 'memory' | 'key'>('info')
   const mine = tasks.filter((t) => t.assignee === id)
   const st = workState(id, tasks, settings.employeeEnabled[id])
   const stats = employeeStats(id, tasks)
@@ -214,6 +302,7 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
           { id: 'info', label: 'Ringkasan' },
           { id: 'tasks', label: 'Riwayat tugas', count: mine.length },
           { id: 'memory', label: 'Catatan' },
+          { id: 'key', label: 'Kunci API' },
         ]}
       />
       {tab === 'info' && (
@@ -260,6 +349,7 @@ function Detail({ id, onClose, onAssign, onChat }: { id: EmployeeId; onClose: ()
           ))}
         </ul>
       )}
+      {tab === 'key' && <KeyTab id={id} />}
       {tab === 'memory' && (
         <div className="mt-4 space-y-3">
           <Field label={`Catatan untuk ${e.name}`} hint="Preferensi atau hal yang perlu diingat. Dikirim sebagai konteks saat Anda chat dengan karyawan ini.">
