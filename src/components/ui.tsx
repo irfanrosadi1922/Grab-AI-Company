@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { AlertTriangle, Inbox, Search } from 'lucide-react'
@@ -135,10 +136,11 @@ export function PriorityBadge({ p }: { p: Priority }) {
 /* ---------- Avatar ---------- */
 export function Avatar({ id, size = 40, ring }: { id: EmployeeId; size?: number; ring?: boolean }) {
   const e = EMP[id]
+  const [broken, setBroken] = useState(false)
   return (
     <span
       aria-hidden
-      className={cn('inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold', ring && 'ring-2 ring-brand')}
+      className={cn('inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full font-semibold', ring && 'ring-2 ring-brand')}
       style={{
         width: size,
         height: size,
@@ -147,7 +149,19 @@ export function Avatar({ id, size = 40, ring }: { id: EmployeeId; size?: number;
         color: `hsl(${e.hue} 55% 80%)`,
       }}
     >
-      {e.name[0]}
+      {broken ? (
+        e.name[0]
+      ) : (
+        <img
+          src={`${import.meta.env.BASE_URL}avatars/${id}.jpg`}
+          alt=""
+          draggable={false}
+          loading="lazy"
+          onError={() => setBroken(true)}
+          className="h-full w-full object-cover"
+          style={{ objectPosition: '50% 20%', transform: 'scale(1.15)' }}
+        />
+      )}
     </span>
   )
 }
