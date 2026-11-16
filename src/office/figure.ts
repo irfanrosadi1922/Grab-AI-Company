@@ -209,17 +209,6 @@ export function createFigure(hue: number, seed: number, id?: string): Figure {
   const legL = mkLeg(-1)
   const legR = mkLeg(1)
 
-  // Wajah: potret kartun ditempel sebagai sprite yang selalu menghadap kamera, menggantikan kepala bentuk dasar.
-  if (id && LOOKS[id]) {
-    head.children.forEach((c) => (c.visible = false))
-    const tex = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}avatars/${id}.png`)
-    tex.colorSpace = THREE.SRGBColorSpace
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, alphaTest: 0.05, depthWrite: true }))
-    sp.scale.set(0.52, 0.45, 1)
-    sp.position.set(0, -0.04, 0.02)
-    head.add(sp)
-  }
-
   // Aksesori di tangan kiri
   const hand = new THREE.Group()
   hand.position.set(0, -0.27, 0.05)
@@ -250,7 +239,7 @@ export function createFigure(hue: number, seed: number, id?: string): Figure {
     lens.position.z = 0.06
     hand.add(lens)
   }
-  hand.visible = !(id && LOOKS[id]) && look.props.some((x) => x === 'abacus' || x === 'mic' || x === 'clipboard' || x === 'camera')
+  hand.visible = look.props.some((x) => x === 'abacus' || x === 'mic' || x === 'clipboard' || x === 'camera')
 
   // Dasi/aksen warna peran di kerah
   if (id && LOOKS[id]) {

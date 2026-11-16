@@ -101,9 +101,9 @@ export class OfficeSim {
       const desk = deskFor(i)
       const fig = createFigure(p.hue, i + 1, p.id)
       const tag = makeSprite(p.name, 'name', 0.22)
-      tag.position.y = 1.98
+      tag.position.y = 1.95
       const bubble = makeSprite(' ', 'bubble', 0.2)
-      bubble.position.y = 2.35
+      bubble.position.y = 2.3
       bubble.visible = false
       fig.root.add(tag)
       fig.root.add(bubble)
