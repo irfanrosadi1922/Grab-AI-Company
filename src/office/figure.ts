@@ -26,7 +26,7 @@ const LOOKS: Record<string, Look> = {
   james: { skin: '#e0ac82', hair: '#15181c', style: 'side', eye: '#2a2018', props: ['clipboard'] },
 }
 
-const lambert = (color: string | THREE.Color) => new THREE.MeshLambertMaterial({ color })
+const lambert = (color: string | THREE.Color) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0 })
 
 export interface Figure {
   root: THREE.Group
@@ -37,7 +37,7 @@ export interface Figure {
 
 function limb(len: number, w: number, color: string) {
   const pivot = new THREE.Group()
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, len, w), lambert(color))
+  const m = new THREE.Mesh(new THREE.CapsuleGeometry(w / 2, Math.max(0.01, len - w), 4, 10), lambert(color))
   m.position.y = -len / 2
   pivot.add(m)
   return pivot
@@ -46,8 +46,7 @@ function limb(len: number, w: number, color: string) {
 /** Model karyawan low-poly dari bentuk dasar. Menghadap +Z pada rotasi Y = 0. */
 export function createFigure(hue: number, seed: number, id?: string): Figure {
   const root = new THREE.Group()
-  const shirt = id && LOOKS[id] ? new THREE.Color('#f7f6f4') : new THREE.Color().setHSL(hue / 360, 0.5, 0.45)
-  const accent = new THREE.Color().setHSL(hue / 360, 0.55, 0.5)
+  const shirt = new THREE.Color().setHSL(hue / 360, 0.5, id && LOOKS[id] ? 0.58 : 0.45)
   const pants = '#2a3038'
   const look: Look = (id && LOOKS[id]) || {
     skin: SKIN[seed % SKIN.length],
@@ -63,7 +62,8 @@ export function createFigure(hue: number, seed: number, id?: string): Figure {
   hips.position.y = 0.82
   root.add(hips)
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.56, 0.26), lambert(shirt))
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.34, 4, 12), lambert(shirt))
+  torso.scale.set(1.1, 1, 0.68)
   torso.position.y = 0.3
   hips.add(torso)
 
@@ -240,13 +240,6 @@ export function createFigure(hue: number, seed: number, id?: string): Figure {
     hand.add(lens)
   }
   hand.visible = look.props.some((x) => x === 'abacus' || x === 'mic' || x === 'clipboard' || x === 'camera')
-
-  // Dasi/aksen warna peran di kerah
-  if (id && LOOKS[id]) {
-    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.3, 0.02), lambert(accent.getStyle()))
-    tie.position.set(0, 0.42, 0.14)
-    hips.add(tie)
-  }
 
   // Gelas kopi di tangan kanan, disembunyikan sampai dipakai.
   const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.1, 10), lambert('#f4efe6'))

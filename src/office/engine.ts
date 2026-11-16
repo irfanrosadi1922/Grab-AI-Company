@@ -30,7 +30,9 @@ export class OfficeEngine {
   constructor(private box: HTMLElement, people: { id: EmployeeId; name: string; hue: number }[], private hooks: Hooks) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    this.renderer.setClearColor('#0e1518')
+    this.renderer.setClearColor('#8a9b97')
+    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     const el = this.renderer.domElement
     el.style.display = 'block'
     el.style.width = '100%'
@@ -38,18 +40,29 @@ export class OfficeEngine {
     box.appendChild(el)
 
     this.scene.add(new THREE.AmbientLight('#ffffff', 0.75))
-    const sun = new THREE.DirectionalLight('#fff4e0', 1.1)
-    sun.position.set(8, 16, 10)
+    const sun = new THREE.DirectionalLight('#fff1dc', 1.25)
+    sun.position.set(-12, 26, 16)
+    sun.castShadow = true
+    sun.shadow.mapSize.set(2048, 2048)
+    const sc = sun.shadow.camera
+    sc.left = -24
+    sc.right = 24
+    sc.top = 26
+    sc.bottom = -22
+    sc.near = 1
+    sc.far = 90
+    sun.shadow.bias = -0.0005
+    sun.shadow.normalBias = 0.03
     this.scene.add(sun)
     this.scene.add(new THREE.HemisphereLight('#cfe6ff', '#7a8a80', 0.35))
 
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200)
+    this.camera = new THREE.PerspectiveCamera(32, 1, 0.5, 400)
     this.controls = new OrbitControls(this.camera, el)
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.08
-    this.controls.maxPolarAngle = Math.PI / 2.15
+    this.controls.maxPolarAngle = Math.PI / 2.4
     this.controls.minDistance = 5
-    this.controls.maxDistance = 46
+    this.controls.maxDistance = 150
     this.controls.screenSpacePanning = false
 
     buildOffice(
@@ -57,6 +70,13 @@ export class OfficeEngine {
       people.map((p, index) => ({ index, name: p.name })),
     )
     this.sim = new OfficeSim(this.scene, people)
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      const mt = m.material as THREE.Material
+      m.receiveShadow = true
+      m.castShadow = !mt.transparent
+    })
 
     this.resize()
     this.home()
@@ -80,10 +100,18 @@ export class OfficeEngine {
 
   home() {
     this.followId = null
-    const portrait = this.camera.aspect < 1
-    const dist = portrait ? 38 : 26
-    this.controls.target.set(0, 0, 0)
-    this.camera.position.set(0, dist * 0.78, dist * 0.7)
+    // Sudut isometrik seperti diorama: dari depan-kanan, agak tinggi
+    const vf = THREE.MathUtils.degToRad(this.camera.fov)
+    const hf = 2 * Math.atan(Math.tan(vf / 2) * this.camera.aspect)
+    const dist = Math.max(18 / Math.tan(hf / 2), 17 / Math.tan(vf / 2))
+    const az = THREE.MathUtils.degToRad(38)
+    const el = THREE.MathUtils.degToRad(46)
+    this.controls.target.set(0, 0, 4)
+    this.camera.position.set(
+      dist * Math.cos(el) * Math.sin(az),
+      dist * Math.sin(el),
+      4 + dist * Math.cos(el) * Math.cos(az),
+    )
     this.controls.update()
   }
 
