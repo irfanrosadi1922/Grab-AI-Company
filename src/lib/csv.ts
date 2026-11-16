@@ -41,10 +41,10 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 const ALIASES: Record<string, string[]> = {
   date: ['tanggal', 'tgl', 'date', 'orderdate', 'tanggalpesanan'],
   store: ['toko', 'store', 'outlet', 'namatoko', 'storename', 'merchantid', 'idmerchant', 'idtoko', 'storeid', 'merchant'],
-  amount: ['penjualan', 'pendapatan', 'omzet', 'total', 'amount', 'revenue', 'sales', 'gross', 'grosssales', 'totalpenjualan', 'nominal'],
-  orders: ['pesanan', 'orders', 'order', 'jumlahpesanan', 'totalpesanan', 'qty', 'jumlah', 'terjual'],
+  amount: ['penjualan', 'pendapatan', 'omzet', 'total', 'amount', 'revenue', 'sales', 'gross', 'grosssales', 'totalpenjualan', 'nominal', 'itemgrosssalesrm', 'itemgrosssales', 'grosssalesrm'],
+  orders: ['pesanan', 'orders', 'order', 'jumlahpesanan', 'totalpesanan', 'qty', 'jumlah', 'terjual', 'unitssold', 'unitsold', 'quantity'],
   name: ['menu', 'nama', 'namamenu', 'item', 'name', 'produk'],
-  revenue: ['pendapatan', 'revenue', 'omzet', 'penjualan', 'total', 'amount'],
+  revenue: ['pendapatan', 'revenue', 'omzet', 'penjualan', 'total', 'amount', 'itemgrosssalesrm', 'itemgrosssales', 'grosssales', 'grosssalesrm'],
   rating: ['rating', 'bintang', 'nilai', 'star', 'stars'],
   text: ['ulasan', 'komentar', 'review', 'text', 'isi', 'catatan', 'comment'],
   channel: ['kanal', 'channel', 'platform', 'sumber'],
@@ -62,12 +62,35 @@ function colIndex(header: string[], field: string): number {
 }
 
 export function parseNumber(raw: string): number | null {
-  let s = raw.trim().replace(/rp\.?/i, '').replace(/\s/g, '')
+  let s = raw.trim().replace(/rp\.?|rm/gi, '').replace(/\s/g, '')
   if (!s) return null
-  s = s.replace(/[.,]\d{1,2}$/, '') // buang desimal (Rupiah tidak memakai sen)
+  const neg = s.startsWith('-')
+  if (neg) s = s.slice(1)
+  if (!/^[\d.,]+$/.test(s)) return null
+  const lastDot = s.lastIndexOf('.')
+  const lastComma = s.lastIndexOf(',')
+  let dec = ''
+  if (lastDot >= 0 && lastComma >= 0) {
+    const sep = lastDot > lastComma ? '.' : ','
+    const i = s.lastIndexOf(sep)
+    dec = s.slice(i + 1)
+    s = s.slice(0, i)
+  } else {
+    const sep = lastDot >= 0 ? '.' : lastComma >= 0 ? ',' : ''
+    if (sep) {
+      const parts = s.split(sep)
+      const tail = parts[parts.length - 1]
+      // satu pemisah dengan 3 angka di belakang = ribuan; selain itu desimal
+      if (parts.length === 2 && tail.length !== 3) {
+        dec = tail
+        s = parts[0]
+      }
+    }
+  }
   s = s.replace(/[.,]/g, '')
-  if (!/^-?\d+$/.test(s)) return null
-  return Number(s)
+  if (!/^\d+$/.test(s) || !/^\d*$/.test(dec)) return null
+  const n = Number(dec ? `${s}.${dec}` : s)
+  return neg ? -n : n
 }
 
 export function parseDate(raw: string): string | null {
@@ -93,7 +116,7 @@ export interface ImportResult<K extends EntryKind> {
 }
 
 const REQUIRED: Record<EntryKind, string[]> = {
-  sales: ['date', 'amount', 'orders'],
+  sales: ['date', 'amount'],
   menu: ['name', 'orders', 'revenue'],
   reviews: ['rating', 'text'],
   marketing: ['channel', 'spend', 'orders'],
@@ -133,13 +156,22 @@ export function buildRows<K extends EntryKind>(
   const body = table.slice(1, MAX_ROWS + 1)
   if (table.length - 1 > MAX_ROWS) out.errors.push(`Hanya ${MAX_ROWS} baris pertama yang dibaca.`)
   const seen = new Set(ctx.existing.sales.map((s) => `${s.date}|${s.storeId}`))
+  const salesAgg = new Map<string, Omit<EntryOf<'sales'>, 'id'>>()
+  const menuAgg = new Map<string, Omit<EntryOf<'menu'>, 'id'>>()
+  const existingMenu = new Set(ctx.existing.menu.map((m) => norm(m.name)))
   const get = (r: string[], f: string) => (idx[f] >= 0 ? (r[idx[f]] ?? '').trim() : '')
 
   const findStore = (v: string): string | null => {
     if (!v) return ctx.defaultStoreId || null
     const n = norm(v)
-    const s = ctx.stores.find((x) => norm(x.name) === n || (x.merchantId && norm(x.merchantId) === n))
-    return s ? s.id : null
+    const s =
+      ctx.stores.find((x) => norm(x.name) === n || (x.merchantId && norm(x.merchantId) === n)) ??
+      ctx.stores.find((x) => {
+        const m = norm(x.name)
+        return m.length >= 4 && n.length >= 4 && (m.includes(n) || n.includes(m))
+      })
+    if (s) return s.id
+    return ctx.stores.length === 1 ? ctx.stores[0].id : ctx.defaultStoreId || null
   }
 
   body.forEach((r, i) => {
@@ -151,7 +183,7 @@ export function buildRows<K extends EntryKind>(
     if (kind === 'sales') {
       const date = parseDate(get(r, 'date'))
       const amount = parseNumber(get(r, 'amount'))
-      const orders = parseNumber(get(r, 'orders'))
+      const orders = idx.orders >= 0 ? parseNumber(get(r, 'orders')) : 0
       const storeId = findStore(get(r, 'store'))
       if (!date) return bad('tanggal tidak dikenali')
       if (amount === null || amount < 0) return bad('penjualan bukan angka')
@@ -159,8 +191,11 @@ export function buildRows<K extends EntryKind>(
       if (!storeId) return bad(`toko "${get(r, 'store')}" tidak ada di Grab Stores`)
       const key = `${date}|${storeId}`
       if (seen.has(key)) return bad(`sudah ada penjualan toko ini pada ${date}`)
-      seen.add(key)
-      ;(out.rows as Omit<EntryOf<'sales'>, 'id'>[]).push({ date, storeId, amount, orders })
+      const acc = salesAgg.get(key)
+      if (acc) {
+        acc.amount += amount
+        acc.orders += orders
+      } else salesAgg.set(key, { date, storeId, amount, orders })
     } else if (kind === 'menu') {
       const name = get(r, 'name').slice(0, 80)
       const orders = parseNumber(get(r, 'orders'))
@@ -168,7 +203,13 @@ export function buildRows<K extends EntryKind>(
       if (!name) return bad('nama menu kosong')
       if (orders === null || orders < 0) return bad('jumlah pesanan bukan angka')
       if (revenue === null || revenue < 0) return bad('pendapatan bukan angka')
-      ;(out.rows as Omit<EntryOf<'menu'>, 'id'>[]).push({ name, orders, revenue })
+      const k = norm(name)
+      if (existingMenu.has(k)) return bad(`menu "${name}" sudah ada`)
+      const acc = menuAgg.get(k)
+      if (acc) {
+        acc.orders += orders
+        acc.revenue += revenue
+      } else menuAgg.set(k, { name, orders, revenue })
     } else if (kind === 'reviews') {
       const rating = parseNumber(get(r, 'rating'))
       const text = get(r, 'text').slice(0, 500)
@@ -189,5 +230,14 @@ export function buildRows<K extends EntryKind>(
       ;(out.rows as Omit<EntryOf<'marketing'>, 'id'>[]).push({ channel, spend, orders })
     }
   })
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  if (kind === 'sales') {
+    out.rows = [...salesAgg.values()].map((x) => ({ ...x, amount: r2(x.amount) })) as ImportResult<K>['rows']
+    if (idx.orders >= 0 && norm(header[idx.orders]) === 'unitssold')
+      out.errors.unshift('Catatan: "Units Sold" adalah jumlah item terjual, bukan jumlah pesanan. Dipakai sebagai pesanan.')
+    if (idx.orders < 0) out.errors.unshift('Catatan: file tanpa kolom pesanan, jumlah pesanan diisi 0.')
+  } else if (kind === 'menu') {
+    out.rows = [...menuAgg.values()].map((x) => ({ ...x, revenue: r2(x.revenue) })) as ImportResult<K>['rows']
+  }
   return out
 }
