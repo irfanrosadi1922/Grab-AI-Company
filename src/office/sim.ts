@@ -99,7 +99,7 @@ export class OfficeSim {
   constructor(scene: THREE.Object3D, people: { id: EmployeeId; name: string; hue: number }[]) {
     people.forEach((p, i) => {
       const desk = deskFor(i)
-      const fig = createFigure(p.hue, i + 1)
+      const fig = createFigure(p.hue, i + 1, p.id)
       const tag = makeSprite(p.name, 'name', 0.22)
       tag.position.y = 1.78
       const bubble = makeSprite(' ', 'bubble', 0.2)
