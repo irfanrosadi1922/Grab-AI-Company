@@ -232,12 +232,12 @@ export function buildRows<K extends EntryKind>(
   })
   const r2 = (n: number) => Math.round(n * 100) / 100
   if (kind === 'sales') {
-    out.rows = [...salesAgg.values()].map((x) => ({ ...x, amount: r2(x.amount) })) as ImportResult<K>['rows']
+    out.rows = [...salesAgg.values()].map((x) => ({ ...x, amount: r2(x.amount) })) as unknown as ImportResult<K>['rows']
     if (idx.orders >= 0 && norm(header[idx.orders]) === 'unitssold')
       out.errors.unshift('Catatan: "Units Sold" adalah jumlah item terjual, bukan jumlah pesanan. Dipakai sebagai pesanan.')
     if (idx.orders < 0) out.errors.unshift('Catatan: file tanpa kolom pesanan, jumlah pesanan diisi 0.')
   } else if (kind === 'menu') {
-    out.rows = [...menuAgg.values()].map((x) => ({ ...x, revenue: r2(x.revenue) })) as ImportResult<K>['rows']
+    out.rows = [...menuAgg.values()].map((x) => ({ ...x, revenue: r2(x.revenue) })) as unknown as ImportResult<K>['rows']
   }
   return out
 }
