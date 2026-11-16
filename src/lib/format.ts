@@ -1,13 +1,30 @@
 export const cn = (...parts: Array<string | false | null | undefined>) =>
   parts.filter(Boolean).join(' ')
 
-export const rupiah = (n: number) => 'Rp ' + Math.round(n).toLocaleString('id-ID')
+let currency = 'IDR'
+export const setCurrency = (c: string) => {
+  currency = c === 'MYR' || c === 'SGD' ? c : 'IDR'
+}
+
+/** Format uang sesuai mata uang di Pengaturan (nama fungsi dipertahankan agar pemanggil tidak berubah). */
+export const rupiah = (n: number) => {
+  if (currency === 'IDR') return 'Rp ' + Math.round(n).toLocaleString('id-ID')
+  const sym = currency === 'MYR' ? 'RM' : 'S$'
+  return sym + ' ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 export const rupiahShort = (n: number) => {
-  if (Math.abs(n) >= 1_000_000_000) return 'Rp ' + (n / 1_000_000_000).toFixed(1).replace('.', ',') + ' M'
-  if (Math.abs(n) >= 1_000_000) return 'Rp ' + (n / 1_000_000).toFixed(1).replace('.', ',') + ' jt'
-  if (Math.abs(n) >= 1_000) return 'Rp ' + Math.round(n / 1_000) + ' rb'
-  return 'Rp ' + n
+  const a = Math.abs(n)
+  if (currency === 'IDR') {
+    if (a >= 1_000_000_000) return 'Rp ' + (n / 1_000_000_000).toFixed(1).replace('.', ',') + ' M'
+    if (a >= 1_000_000) return 'Rp ' + (n / 1_000_000).toFixed(1).replace('.', ',') + ' jt'
+    if (a >= 1_000) return 'Rp ' + Math.round(n / 1_000) + ' rb'
+    return 'Rp ' + n
+  }
+  const sym = currency === 'MYR' ? 'RM' : 'S$'
+  if (a >= 1_000_000) return sym + ' ' + (n / 1_000_000).toFixed(1) + 'M'
+  if (a >= 1_000) return sym + ' ' + (n / 1_000).toFixed(1) + 'k'
+  return sym + ' ' + (Math.round(n * 100) / 100)
 }
 
 const p2 = (n: number) => String(n).padStart(2, '0')

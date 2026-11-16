@@ -5,6 +5,7 @@ import { newId, nowStamp } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { fingerprints, loadRemote, saveRemote } from '../lib/remote'
 import { setAiBaseContext } from '../lib/ai'
+import { setCurrency } from '../lib/format'
 import { storeTotals } from '../lib/stats'
 import { rupiah } from '../lib/format'
 
@@ -172,6 +173,7 @@ export function AppStateProvider({ children, userId }: { children: ReactNode; us
   const [meetings, setMeetings] = useState<MeetingRecord[]>(initial.meetings)
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>(initial.chats)
   const [settings, setSettings] = useState<Settings>(initial.settings)
+  setCurrency(settings.currency)
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const toastId = useRef(0)
 
