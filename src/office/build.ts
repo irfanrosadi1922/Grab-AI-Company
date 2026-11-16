@@ -102,30 +102,30 @@ function buildExterior(g: THREE.Group, W: number, D: number) {
   const CAP = '#c98c72'
 
   // Tapak seperti diorama: alas tebal + aspal
-  box(g, 35, 0.5, 34, 0, GROUND - 0.7, 5.5, '#706c66')
-  box(g, 34, 0.5, 33, 0, GROUND - 0.25, 5.5, '#52565b')
-  box(g, 34, 0.04, 2.4, 0, GROUND + 0.02, D + 1.2, '#bdb9af') // trotoar depan
+  box(g, 31.4, 0.5, 29.6, 0, GROUND - 0.7, 3.8, '#706c66')
+  box(g, 30.6, 0.5, 28.8, 0, GROUND - 0.25, 3.8, '#52565b')
+  box(g, 30.6, 0.04, 2.4, 0, GROUND + 0.02, D + 1.2, '#bdb9af') // trotoar depan
   box(g, 2.4, 0.04, FLOOR.d + 2, W + 1.2, GROUND + 0.02, 0, '#bdb9af') // trotoar timur
-  box(g, 34, 0.03, 2.6, 0, GROUND + 0.02, -D - 1.7, '#6f9a5b') // rumput belakang
-  for (const x of [-12, -8.5, -5, 3.8, 7.3, 10.8, 14]) box(g, 0.14, 0.02, 4.6, x, GROUND + 0.02, 14.5, '#e8e8e4')
+  box(g, 30.6, 0.03, 2.6, 0, GROUND + 0.02, -D - 1.7, '#6f9a5b') // rumput belakang
+  for (const x of [-12, -8.5, -5, 3.8, 7.3, 9.8, 13.4]) box(g, 0.14, 0.02, 4.6, x, GROUND + 0.02, 14.5, '#e8e8e4')
 
   car(g, -10.25, 14.4, 0.04, '#b8bcc2')
   car(g, -6.75, 14.6, -0.03, '#9aa1a8')
   car(g, 5.5, 14.5, 0.02, '#2f5fb3')
-  car(g, 12.4, 14.4, -0.04, '#b5302b')
+  car(g, 11.6, 14.4, -0.04, '#b5302b')
 
   for (const x of [-12, -10.6, -9.2, -7.8, -6.4, -5, -3.6, 3.6, 5, 6.4, 7.8, 9.2, 10.6, 12]) {
     sphere(g, 0.5, x, GROUND + 0.45, D + 2, (Math.round(x * 3) & 1) === 0 ? '#3f9a52' : '#4aa95c')
   }
-  tree(g, -15, -8.5)
-  tree(g, 15, -8.5)
-  tree(g, 15.5, 20)
+  tree(g, -14, -8.8)
+  tree(g, 14, -8.8)
+  tree(g, 14.6, 17.6)
 
   // Papan nama di tapak
-  box(g, 3.4, 0.4, 0.6, -13.6, GROUND + 0.2, 11.4, '#76726b')
-  box(g, 3.2, 1.5, 0.2, -13.6, GROUND + 1.15, 11.4, '#1e2a38')
+  box(g, 3.4, 0.4, 0.6, -12.6, GROUND + 0.2, 11.4, '#76726b')
+  box(g, 3.2, 1.5, 0.2, -12.6, GROUND + 1.15, 11.4, '#1e2a38')
   const mono = makeSprite('GRAB AI COMPANY', 'sign', 0.42)
-  mono.position.set(-13.6, GROUND + 1.15, 11.55)
+  mono.position.set(-12.6, GROUND + 1.15, 11.55)
   g.add(mono)
 
   // Dinding belakang dan kiri (tinggi, sisi dalam berwarna), terlihat dari kamera depan-kanan
@@ -201,9 +201,9 @@ export function buildOffice(scene: THREE.Scene, deskLabels: { index: number; nam
 
   // Lantai dasar dan zona
   box(g, FLOOR.w + 0.6, 0.3, FLOOR.d + 0.6, 0, -0.15, 0, '#d9ddd9')
-  box(g, 14.9, 0.02, FLOOR.d, -W + 7.45, 0.01, 0, '#c7b79e') // ruang kerja (kayu)
-  box(g, 9, 0.02, 7, 7.5, 0.012, -4.5, '#8fa3b5') // ruang rapat (karpet)
-  box(g, 9, 0.02, 6.4, 7.5, 0.012, 4.8, '#e8dcc6') // pantry
+  box(g, 14.9, 0.02, FLOOR.d, -W + 7.45, 0.01, 0, '#8e9eb0') // ruang kerja (karpet abu-biru)
+  box(g, 9, 0.02, 7, 7.5, 0.012, -4.5, '#7e9d8a') // ruang rapat (karpet)
+  box(g, 9, 0.02, 6.4, 7.5, 0.012, 4.8, '#e6d3ad') // pantry
   box(g, 3.2, 0.025, 2.4, 10.2, 0.02, 5.4, '#b86a5a') // karpet sofa
 
   buildExterior(g, W, D)
@@ -212,6 +212,20 @@ export function buildOffice(scene: THREE.Scene, deskLabels: { index: number; nam
   wallX(g, 3, 2.6, D, '#e3d6b8')
   wallZ(g, -1, 3, 3.8, '#a9bfa3')
   wallZ(g, -1, 6.2, W, '#a9bfa3')
+  // Lemari arsip, printer, dan dispenser di ruang kerja
+  for (const x of [-11.2, -10.3, 1.4, 2.3]) {
+    box(g, 0.8, 1.3, 0.6, x, 0.65, -D + 0.45, '#8f9ba3')
+    box(g, 0.82, 0.02, 0.62, x, 0.99, -D + 0.45, '#6d787f')
+    box(g, 0.82, 0.02, 0.62, x, 0.66, -D + 0.45, '#6d787f')
+  }
+  box(g, 1.2, 0.75, 0.7, -6.6, 0.375, -D + 0.45, '#cfd3d6')
+  box(g, 0.7, 0.3, 0.5, -6.6, 0.9, -D + 0.45, '#e9e9e6')
+  box(g, 0.5, 0.03, 0.4, -6.6, 1.06, -D + 0.4, '#ffffff')
+  cyl(g, 0.22, 0.22, 0.9, -2.4, 0.45, -D + 0.5, '#e6eef2')
+  sphere(g, 0.26, -2.4, 1.15, -D + 0.5, '#7fb5d8')
+  // Karpet jalan
+  box(g, 14, 0.015, 1.4, -4.5, 0.02, 0, '#6d7e92')
+
   // Mesin penjual otomatis di pantry
   box(g, 0.9, 1.8, 0.7, 9.6, 0.9, 7.55, '#3a5f9e')
   box(g, 0.7, 1.1, 0.04, 9.6, 1.1, 7.18, '#9ad2f0')
@@ -234,6 +248,14 @@ export function buildOffice(scene: THREE.Scene, deskLabels: { index: number; nam
     box(mon, 0.06, 0.18, 0.05, 0, 0.09, 0, '#22282c')
     g.add(mon)
     box(g, 0.45, 0.02, 0.15, d.x, 0.78, d.z + dir * 0.18, '#2a2f33') // keyboard
+    // kotak PC, kertas, lampu meja, dan cangkir
+    box(g, 0.22, 0.45, 0.5, d.x + 0.55, 0.27, d.z + dir * 0.0, '#d8d2c4')
+    box(g, 0.3, 0.025, 0.4, d.x - 0.5, 0.79, d.z + dir * 0.1, '#f7f7f4')
+    box(g, 0.28, 0.025, 0.38, d.x - 0.46, 0.815, d.z + dir * 0.12, '#eceae4')
+    cyl(g, 0.03, 0.05, 0.02, d.x + 0.6, 0.78, d.z - dir * 0.22, '#2d3338')
+    box(g, 0.02, 0.28, 0.02, d.x + 0.6, 0.92, d.z - dir * 0.22, '#2d3338')
+    box(g, 0.14, 0.04, 0.08, d.x + 0.6, 1.07, d.z - dir * 0.22, '#f0b429')
+    cyl(g, 0.04, 0.035, 0.09, d.x + 0.32, 0.82, d.z + dir * 0.22, '#e8eaeb')
     chair(g, d.seat.x, d.seat.z, d.face)
     const tag = makeSprite(name, 'dim', 0.2)
     tag.position.set(d.x, 1.0, d.z)

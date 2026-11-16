@@ -39,16 +39,16 @@ export class OfficeEngine {
     el.style.height = '100%'
     box.appendChild(el)
 
-    this.scene.add(new THREE.AmbientLight('#ffffff', 0.75))
-    const sun = new THREE.DirectionalLight('#fff1dc', 1.25)
+    this.scene.add(new THREE.AmbientLight('#ffffff', 0.55))
+    const sun = new THREE.DirectionalLight('#fff0d8', 1.6)
     sun.position.set(-12, 26, 16)
     sun.castShadow = true
     sun.shadow.mapSize.set(2048, 2048)
     const sc = sun.shadow.camera
     sc.left = -24
     sc.right = 24
-    sc.top = 26
-    sc.bottom = -22
+    sc.top = 24
+    sc.bottom = -20
     sc.near = 1
     sc.far = 90
     sun.shadow.bias = -0.0005
@@ -103,14 +103,14 @@ export class OfficeEngine {
     // Sudut isometrik seperti diorama: dari depan-kanan, agak tinggi
     const vf = THREE.MathUtils.degToRad(this.camera.fov)
     const hf = 2 * Math.atan(Math.tan(vf / 2) * this.camera.aspect)
-    const dist = Math.max(18 / Math.tan(hf / 2), 17 / Math.tan(vf / 2))
-    const az = THREE.MathUtils.degToRad(38)
-    const el = THREE.MathUtils.degToRad(46)
-    this.controls.target.set(0, 0, 4)
+    const dist = Math.max(17.5 / Math.tan(hf / 2), 12 / Math.tan(vf / 2))
+    const az = THREE.MathUtils.degToRad(42)
+    const el = THREE.MathUtils.degToRad(42)
+    this.controls.target.set(0, 0, 3)
     this.camera.position.set(
       dist * Math.cos(el) * Math.sin(az),
       dist * Math.sin(el),
-      4 + dist * Math.cos(el) * Math.cos(az),
+      3 + dist * Math.cos(el) * Math.cos(az),
     )
     this.controls.update()
   }
