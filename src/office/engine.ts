@@ -5,6 +5,7 @@ import { buildOffice } from './build'
 import { OfficeSim } from './sim'
 import type { AgentInfo } from './sim'
 import { disposeTextCache } from './sprites'
+import { getPlacedFurniture } from '../lib/officeFurniture'
 
 export interface Hooks {
   onInfo: (list: AgentInfo[]) => void
@@ -26,6 +27,8 @@ export class OfficeEngine {
   private paused = false
   private down: { x: number; y: number; t: number } | null = null
   private ray = new THREE.Raycaster()
+  private furnitureGroup = new THREE.Group()
+  private furnitureListener = () => this.refreshFurniture()
 
   constructor(private box: HTMLElement, people: { id: EmployeeId; name: string; hue: number }[], private hooks: Hooks) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -70,6 +73,9 @@ export class OfficeEngine {
       people.map((p, index) => ({ index, name: p.name })),
     )
     this.sim = new OfficeSim(this.scene, people)
+    this.scene.add(this.furnitureGroup)
+    this.refreshFurniture()
+    window.addEventListener('office-furniture-updated', this.furnitureListener)
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh
       if (!m.isMesh) return
@@ -88,6 +94,21 @@ export class OfficeEngine {
 
     this.last = performance.now()
     this.raf = requestAnimationFrame(this.loop)
+  }
+
+  private refreshFurniture() {
+    this.furnitureGroup.clear()
+    const loader = new THREE.TextureLoader()
+    getPlacedFurniture().forEach((item, index) => {
+      loader.load(item.image, (texture) => {
+        if (!getPlacedFurniture().some((x) => x.classname === item.classname)) { texture.dispose(); return }
+        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.35, 1.35), material)
+        mesh.rotation.x = -Math.PI / 2
+        mesh.position.set(4.4 + (index % 4) * 1.8, 0.055, -0.5 + Math.floor(index / 4) * 1.8)
+        this.furnitureGroup.add(mesh)
+      }, undefined, () => {})
+    })
   }
 
   private resize() {
@@ -191,6 +212,7 @@ export class OfficeEngine {
   dispose() {
     cancelAnimationFrame(this.raf)
     this.ro.disconnect()
+    window.removeEventListener('office-furniture-updated', this.furnitureListener)
     const el = this.renderer.domElement
     el.removeEventListener('pointerdown', this.onDown)
     el.removeEventListener('pointerup', this.onUp)
