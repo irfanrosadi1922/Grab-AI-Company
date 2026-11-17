@@ -127,13 +127,8 @@ export default function HabboAssetsPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         {items.map((item, i) => (
           <button key={item.classname || i} onClick={() => void openDetail(item)} className="overflow-hidden rounded-ctl border border-line bg-surface text-left transition hover:border-brand">
-            <div className="flex h-36 items-center justify-center bg-[#e7e8e6] p-2">
+            <div className="flex h-36 items-center justify-center bg-transparent p-2">
               {imageFor(item) ? <img src={imageFor(item)} alt={item.name || item.classname || 'Habbo furniture'} loading="lazy" className="max-h-full max-w-full object-contain" /> : <ImageIcon className="text-gray-500" />}
-            </div>
-            <div className="space-y-1 p-3">
-              <p className="line-clamp-2 min-h-10 text-sm font-semibold">{item.name || item.classname || 'Furniture'}</p>
-              <p className="truncate text-xs text-mute">{item.classname || 'Classname tidak tersedia'}</p>
-              <div className="flex items-center justify-between gap-2"><Badge tone="neutral">{item.category || item.type || 'Furniture'}</Badge>{item.revision && <span className="text-[10px] text-mute">r{item.revision}</span>}</div>
             </div>
           </button>
         ))}
