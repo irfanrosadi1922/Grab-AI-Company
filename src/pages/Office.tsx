@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Users, Trash2, UserRound, Save, Plus, Minus } from 'lucide-react'
+import { Users, Trash2, UserRound, Save, Plus, Minus, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import { Avatar, Button, Card, PageHeader } from '../components/ui'
 import { EMPLOYEES } from '../data/employees'
 import { getPlacedFurniture, type PlacedFurniture } from '../lib/officeFurniture'
@@ -17,6 +17,9 @@ export default function Office() {
   const [looks, setLooks] = useState<Looks>({})
   const [agentId, setAgentId] = useState<EmployeeId>(EMPLOYEES[0].id)
   const [figure, setFigure] = useState(DEFAULT_FIGURE)
+  const [zoom, setZoom] = useState(1)
+  const pointers = useRef<Map<number, {x:number;y:number}>>(new Map())
+  const pinchStart = useRef<{distance:number;zoom:number}|null>(null)
   const canvas = useRef<HTMLDivElement>(null)
   const drag = useRef<{ id: string; pointer: number; dx: number; dy: number } | null>(null)
 
@@ -33,7 +36,33 @@ export default function Office() {
     setFurniture(next)
     window.dispatchEvent(new CustomEvent('office-furniture-updated'))
   }
+  const distance = (a:{x:number;y:number},b:{x:number;y:number}) => Math.hypot(a.x-b.x,a.y-b.y)
+  const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    if (pointers.current.size===2) {
+      const pts=[...pointers.current.values()]
+      pinchStart.current={distance:distance(pts[0],pts[1]),zoom}
+      drag.current=null
+    }
+  }
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    if (pointers.current.size===2 && pinchStart.current) {
+      const pts=[...pointers.current.values()]
+      const next=pinchStart.current.zoom*distance(pts[0],pts[1])/Math.max(1,pinchStart.current.distance)
+      setZoom(Math.max(.5,Math.min(2.5,next)))
+      drag.current=null
+      return
+    }
+    moveDrag(e)
+  }
+  const handleCanvasPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size<2) pinchStart.current=null
+    endDrag(e)
+  }
   const startDrag = (e: React.PointerEvent<HTMLDivElement>, item: PlacedFurniture) => {
+    if (pointers.current.size>1) return;
     if ((e.target as HTMLElement).closest('[data-resize-control]')) return
     const el = canvas.current
     if (!el) return
@@ -47,8 +76,8 @@ export default function Office() {
     const d=drag.current, el=canvas.current
     if (!d || d.pointer!==e.pointerId || !el) return
     const r=el.getBoundingClientRect()
-    const x=Math.max(5,Math.min(95,((e.clientX-r.left-d.dx)/r.width)*100))
-    const y=Math.max(8,Math.min(92,((e.clientY-r.top-d.dy)/r.height)*100))
+    const x=Math.max(5,Math.min(95,((e.clientX-r.left-d.dx)/(r.width*zoom))*100))
+    const y=Math.max(8,Math.min(92,((e.clientY-r.top-d.dy)/(r.height*zoom))*100))
     setFurniture(old=>old.map((it,i)=>it.classname===d.id?{...it,x,y}:it.x==null||it.y==null?{...it,x:20+(i%4)*20,y:25+Math.floor(i/4)*22}:it))
   }
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -70,13 +99,13 @@ export default function Office() {
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture · sentuh lalu geser</p></div>
+        <div className="flex items-center gap-2"><button type="button" aria-label="Perkecil kanvas" onClick={()=>setZoom(z=>Math.max(.5,+(z-.15).toFixed(2)))} className="rounded-lg border border-line bg-card p-2"><ZoomOut size={16}/></button><span className="min-w-10 text-center text-xs tabular-nums">{Math.round(zoom*100)}%</span><button type="button" aria-label="Perbesar kanvas" onClick={()=>setZoom(z=>Math.min(2.5,+(z+.15).toFixed(2)))} className="rounded-lg border border-line bg-card p-2"><ZoomIn size={16}/></button><button type="button" aria-label="Reset zoom" onClick={()=>setZoom(1)} className="rounded-lg border border-line bg-card p-2"><RotateCcw size={16}/></button></div>
         {selected && <Button size="sm" variant="danger" icon={Trash2} onClick={()=>{saveFurniture(furniture.filter(x=>x.classname!==selected));setSelected(null)}}>Hapus pilihan</Button>}
       </div>
-      <div ref={canvas} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} className="relative min-h-[58dvh] overflow-hidden bg-[#f5f3ee]" style={{backgroundImage:'linear-gradient(#d9d5cc 1px, transparent 1px),linear-gradient(90deg,#d9d5cc 1px,transparent 1px)',backgroundSize:'24px 24px',touchAction:'none'}}>
+      <div ref={canvas} onPointerDown={handleCanvasPointerDown} onPointerMove={handleCanvasPointerMove} onPointerUp={handleCanvasPointerUp} onPointerCancel={handleCanvasPointerUp} className="relative min-h-[58dvh] overflow-hidden bg-transparent" style={{backgroundImage:'linear-gradient(#d9d5cc 1px, transparent 1px),linear-gradient(90deg,#d9d5cc 1px,transparent 1px)',backgroundSize:`${24*zoom}px ${24*zoom}px`,touchAction:'none'}}>
         {furniture.length===0 ? <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"><Users className="mb-3 text-[#77736b]" size={30}/><p className="text-sm font-semibold text-[#45423c]">Kanvas masih kosong</p><p className="mt-1 max-w-xs text-xs text-[#77736b]">Tambahkan furniture dari Habbo Asset Library.</p></div> :
-          furniture.map((item,i)=>{const size=item.size??112;return <div key={item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>setSelected(item.classname)} aria-label={'Pindahkan '+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===item.classname?'z-10 border-brand bg-brand/10 ring-2 ring-brand/30':'border-[#d6d1c7] bg-white/85'}`} style={{left:(item.x??(20+(i%4)*20))+'%',top:(item.y??(25+Math.floor(i/4)*22))+'%',width:size,height:size,touchAction:'none',transform:'translate(-50%,-50%)'}}><img src={item.image} alt={item.name} draggable={false} className="pointer-events-none h-[78%] w-full object-contain"/><span className="mt-1 line-clamp-1 w-full text-[10px] text-[#45423c]">{item.name}</span>{selected===item.classname&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-2 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Perkecil" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.classname,-16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Minus size={16}/></button><button type="button" aria-label="Perbesar" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.classname,16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Plus size={16}/></button></div>}</div>})}
+          <div className="absolute inset-0 origin-center" style={{transform:`scale(${zoom})`}}>{furniture.map((item,i)=>{const size=item.size??112;return <div key={item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>setSelected(item.classname)} aria-label={'Pindahkan '+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===item.classname?'z-10 border-brand bg-brand/10 ring-2 ring-brand/30':'border-transparent bg-transparent'}`} style={{left:(item.x??(20+(i%4)*20))+'%',top:(item.y??(25+Math.floor(i/4)*22))+'%',width:size,height:size,touchAction:'none',transform:'translate(-50%,-50%)'}}><img src={item.image} alt={item.name} draggable={false} className="pointer-events-none h-[78%] w-full object-contain"/><span className="mt-1 line-clamp-1 w-full text-[10px] text-[#45423c]">{item.name}</span>{selected===item.classname&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-2 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Perkecil" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.classname,-16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Minus size={16}/></button><button type="button" aria-label="Perbesar" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.classname,16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Plus size={16}/></button></div>}</div>})}</div>}
       </div>
-      <div className="border-t border-line px-4 py-3 text-xs text-mute">Sentuh dan tahan furnitur untuk menggeser. Pilih furnitur, lalu tekan tombol − atau + untuk mengubah ukuran.</div>
     </Card>
     <Card className="space-y-3 p-4">
       <div className="flex items-center gap-2"><UserRound size={18}/><h2 className="text-sm font-semibold">Personalisasi karakter agen</h2></div>
