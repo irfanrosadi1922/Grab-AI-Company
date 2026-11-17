@@ -5,7 +5,7 @@ export function getPlacedFurniture(): PlacedFurniture[] {
 }
 export function addPlacedFurniture(item: PlacedFurniture) {
   const items = getPlacedFurniture()
-  items.push({ ...item, id: item.id || (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : item.classname + '-' + Date.now()) })
+  items.push({ ...item, x: item.x ?? 50, y: item.y ?? 50, id: item.id || (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : item.classname + '-' + Date.now()) })
   localStorage.setItem(KEY, JSON.stringify(items))
   window.dispatchEvent(new CustomEvent('office-furniture-updated'))
   return true
