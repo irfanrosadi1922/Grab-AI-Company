@@ -29,13 +29,21 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
   if (!await signedIn(req)) return json({ error: 'unauthorized' }, 401)
 
-  const token = Deno.env.get('HABBOASSETS_API_KEY')
-  if (!token) return json({ error: 'habboassets_not_configured' }, 503)
-
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return json({ error: 'bad_request' }, 400) }
 
   const action = String(body.action ?? 'list')
+  if (action === 'imagingInfo') {
+    const classname = typeof body.classname === 'string' ? body.classname : ''
+    if (!/^[a-zA-Z0-9_*.-]{1,120}$/.test(classname)) return json({ error: 'invalid_classname' }, 400)
+    try {
+      const response = await fetch(`https://www.habboassets.com/imaging/info/furniture/${encodeURIComponent(classname)}`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12000) })
+      if (!response.ok) return json({ error: 'habboassets_info_error', status: response.status }, 502)
+      return json({ data: await response.json(), action, classname })
+    } catch { return json({ error: 'upstream_unavailable' }, 504) }
+  }
+  const token = Deno.env.get('HABBOASSETS_API_KEY')
+  if (!token) return json({ error: 'habboassets_not_configured' }, 503)
   const hotel = Math.min(100, Math.max(1, Number(body.hotelId) || 1))
   const params = new URLSearchParams()
   const search = typeof body.search === 'string' ? body.search.trim().slice(0, 100) : ''
