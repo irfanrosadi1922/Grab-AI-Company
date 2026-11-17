@@ -41,12 +41,27 @@ export default function HabboAssetsPage() {
       const { data, error: invokeError } = await supabase.functions.invoke<ApiResult>('habbo-assets', {
         body: { action: 'list', search, category, page: nextPage, perPage: 24, hotelId },
       })
-      if (invokeError) throw invokeError
-      if (data?.error) throw new Error(data.message || data.error)
+      if (invokeError) {
+        let detail = invokeError.message || 'Permintaan ke Edge Function gagal.'
+        const context = (invokeError as typeof invokeError & { context?: unknown }).context
+        if (context instanceof Response) {
+          try {
+            const body = await context.clone().json() as { error?: string; message?: string; status?: number }
+            detail = body.message
+              ? `${body.error || 'Error'} (HTTP ${context.status}${body.status ? `, upstream ${body.status}` : ''}): ${body.message}`
+              : `${body.error || detail} (HTTP ${context.status})`
+          } catch {
+            detail = `HTTP ${context.status}: ${detail}`
+          }
+        }
+        throw new Error(detail)
+      }
+      if (data?.error) throw new Error(`${data.error}${data.status ? ` (HTTP ${data.status})` : ''}: ${data.message || 'Permintaan gagal'}`)
       const payload = data?.data
       const rows = Array.isArray(payload) ? payload : payload?.data
-      setItems(Array.isArray(rows) ? rows : [])
-      setTotal(Array.isArray(payload) ? rows.length : Number(payload?.meta?.total ?? 0))
+      if (!Array.isArray(rows)) throw new Error('Format data dari HabboAssets tidak sesuai. Respons API tidak berisi daftar furniture.')
+      setItems(rows)
+      setTotal(Array.isArray(payload) ? rows.length : Number(payload?.meta?.total ?? rows.length))
       setPage(nextPage)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Tidak dapat mengambil katalog HabboAssets.')
