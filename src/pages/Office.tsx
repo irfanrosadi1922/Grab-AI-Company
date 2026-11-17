@@ -25,8 +25,9 @@ export default function Office() {
   const [building, setBuilding] = useState(false)
   const [buildError, setBuildError] = useState('')
   const [statePlaying, setStatePlaying] = useState(false)
-  const pointers = useRef<Map<number, {x:number;y:number}>>(new Map())
+  const pointers = useRef<Map<number, {x:number;y:number;target:string|null}>>(new Map())
   const pinchStart = useRef<{distance:number;zoom:number}|null>(null)
+  const furniturePinchStart = useRef<{id:string;distance:number;size:number}|null>(null)
   const canvas = useRef<HTMLDivElement>(null)
   const drag = useRef<{ id: string; pointer: number; dx: number; dy: number } | null>(null)
 
@@ -135,22 +136,38 @@ export default function Office() {
   const distance = (a:{x:number;y:number},b:{x:number;y:number}) => Math.hypot(a.x-b.x,a.y-b.y)
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
-    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+    const target = (e.target as HTMLElement).closest<HTMLElement>('[data-furniture-id]')?.dataset.furnitureId ?? null
+    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,target})
     if (pointers.current.size===2) {
       const pts=[...pointers.current.values()]
-      pinchStart.current={distance:Math.max(1,distance(pts[0],pts[1])),zoom}
+      const startDistance=Math.max(1,distance(pts[0],pts[1]))
+      if (pts[0].target && pts[0].target===pts[1].target) {
+        const item=furniture.find(x=>(x.id || x.classname)===pts[0].target)
+        furniturePinchStart.current=item?{id:pts[0].target,distance:startDistance,size:item.size??112}:null
+        pinchStart.current=null
+      } else {
+        furniturePinchStart.current=null
+        pinchStart.current={distance:startDistance,zoom}
+      }
       drag.current=null
     }
   }
   const handleCanvasPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (pointers.current.has(e.pointerId)) {
       e.preventDefault()
-      pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+      const previous=pointers.current.get(e.pointerId)!
+      pointers.current.set(e.pointerId,{...previous,x:e.clientX,y:e.clientY})
     }
-    if (pointers.current.size===2 && pinchStart.current) {
+    if (pointers.current.size===2) {
       const pts=[...pointers.current.values()]
-      const next=pinchStart.current.zoom*distance(pts[0],pts[1])/pinchStart.current.distance
-      setZoom(Math.max(.5,Math.min(2.5,next)))
+      if (furniturePinchStart.current) {
+        const start=furniturePinchStart.current
+        const nextSize=Math.max(48,Math.min(320,start.size*distance(pts[0],pts[1])/start.distance))
+        setFurniture(current=>current.map(item=>(item.id || item.classname)===start.id?{...item,size:nextSize}:item))
+      } else if (pinchStart.current) {
+        const next=pinchStart.current.zoom*distance(pts[0],pts[1])/pinchStart.current.distance
+        setZoom(Math.max(.5,Math.min(2.5,next)))
+      }
       drag.current=null
       return
     }
@@ -158,7 +175,11 @@ export default function Office() {
   }
   const handleCanvasPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     pointers.current.delete(e.pointerId)
-    if (pointers.current.size<2) pinchStart.current=null
+    if (pointers.current.size<2) {
+      pinchStart.current=null
+      furniturePinchStart.current=null
+      setFurniture(current=>{localStorage.setItem('grab-ai-office-furniture-v2',JSON.stringify(current));return current})
+    }
     endDrag(e)
   }
   const startDrag = (e: React.PointerEvent<HTMLDivElement>, item: PlacedFurniture) => {
@@ -206,7 +227,7 @@ export default function Office() {
       <div ref={canvas} onPointerDown={handleCanvasPointerDown} onPointerMove={handleCanvasPointerMove} onPointerUp={handleCanvasPointerUp} onPointerCancel={handleCanvasPointerUp} className="relative h-[72dvh] overflow-auto" style={{backgroundColor:"#171a22",backgroundImage:'linear-gradient(45deg, rgba(255,255,255,.10) 1px, transparent 1px),linear-gradient(-45deg, rgba(255,255,255,.10) 1px, transparent 1px)',backgroundSize:`${36*zoom}px ${36*zoom}px`,backgroundPosition:"center center",touchAction:'none'}}>
         <div className="relative origin-top-left" style={{width:"4000%", height:"4000dvh", minWidth:"4000%", transform:`scale(${zoom})`, transformOrigin:"top left"}}>
           {furniture.length === 0 && <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"><p className="text-sm font-semibold text-slate-100">{building ? 'Mengambil furniture asli dari Habbo Asset Library…' : 'Kanvas kantor belum terisi'}</p><p className="mt-1 max-w-xs text-xs text-slate-400">{buildError || 'Kantor sedang disusun menggunakan aset Habbo.'}</p><a href="/assets" className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white">Buka Habbo Asset Library</a></div>}
-          {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.id || item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>{setSelected(item.id || item.classname);setStatePlaying(false)}} aria-label={"Pindahkan "+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===(item.id || item.classname)?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:((item.x??(20+(i%4)*20))/40)+"%",top:((item.y??(25+Math.floor(i/4)*22))/40)+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={furnitureImage(item)} alt={item.name} draggable={false} className="pointer-events-none h-[78%] w-full object-contain"/>{selected===(item.id || item.classname)&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Putar furniture" title="Putar 45 derajat" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();updateSelected({direction:((item.direction ?? 2)+1)%8})}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><RotateCw size={14}/></button><button type="button" aria-label="Perkecil furniture" title="Perkecil furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,-16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomOut size={14}/></button><button type="button" aria-label="Perbesar furniture" title="Perbesar furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomIn size={14}/></button><button type="button" aria-label="Hapus furniture" title="Hapus furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();saveFurniture(furniture.filter(x=>(x.id || x.classname)!==(item.id || item.classname)));setSelected(null);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-700"><Trash2 size={14}/></button>{(item.states ?? 1)>1&&<><button type="button" data-resize-control aria-label="Ganti state furniture" title={(item.states ?? 1)===2?((item.state ?? 0)===0?"Nyalakan":"Matikan"):"Ganti state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const total=item.states??1;updateSelected({state:((item.state??0)+1)%total});setStatePlaying(false)}} className={`flex h-7 items-center justify-center gap-1 rounded-full px-2 text-[10px] font-bold ${(item.state??0)>0?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}><Lightbulb size={14}/>{(item.states??1)===2?((item.state??0)===0?"OFF":"ON"):`S${item.state??0}`}</button><button type="button" data-resize-control aria-label={statePlaying?"Hentikan animasi state":"Jalankan animasi state"} title={statePlaying?"Hentikan animasi":"Putar animasi state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setStatePlaying(v=>!v)}} className={`flex h-7 w-7 items-center justify-center rounded-full ${statePlaying?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}>{statePlaying?<Pause size={14}/>:<Play size={14}/>}</button></>}</div>}</div>})}
+          {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.id || item.classname} data-furniture-id={item.id || item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>{setSelected(item.id || item.classname);setStatePlaying(false)}} aria-label={"Pindahkan "+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===(item.id || item.classname)?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:((item.x??(20+(i%4)*20))/40)+"%",top:((item.y??(25+Math.floor(i/4)*22))/40)+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={furnitureImage(item)} alt={item.name} draggable={false} className="pointer-events-none h-[78%] w-full object-contain"/>{selected===(item.id || item.classname)&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Putar furniture" title="Putar 45 derajat" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();updateSelected({direction:((item.direction ?? 2)+1)%8})}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><RotateCw size={14}/></button><button type="button" aria-label="Perkecil furniture" title="Perkecil furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,-16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomOut size={14}/></button><button type="button" aria-label="Perbesar furniture" title="Perbesar furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomIn size={14}/></button><button type="button" aria-label="Hapus furniture" title="Hapus furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();saveFurniture(furniture.filter(x=>(x.id || x.classname)!==(item.id || item.classname)));setSelected(null);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-700"><Trash2 size={14}/></button>{(item.states ?? 1)>1&&<><button type="button" data-resize-control aria-label="Ganti state furniture" title={(item.states ?? 1)===2?((item.state ?? 0)===0?"Nyalakan":"Matikan"):"Ganti state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const total=item.states??1;updateSelected({state:((item.state??0)+1)%total});setStatePlaying(false)}} className={`flex h-7 items-center justify-center gap-1 rounded-full px-2 text-[10px] font-bold ${(item.state??0)>0?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}><Lightbulb size={14}/>{(item.states??1)===2?((item.state??0)===0?"OFF":"ON"):`S${item.state??0}`}</button><button type="button" data-resize-control aria-label={statePlaying?"Hentikan animasi state":"Jalankan animasi state"} title={statePlaying?"Hentikan animasi":"Putar animasi state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setStatePlaying(v=>!v)}} className={`flex h-7 w-7 items-center justify-center rounded-full ${statePlaying?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}>{statePlaying?<Pause size={14}/>:<Play size={14}/>}</button></>}</div>}</div>})}
         </div>
       </div>
     </Card>
