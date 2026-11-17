@@ -1,5 +1,5 @@
 export type PlacedFurniture = { classname: string; name: string; image: string }
-const KEY = 'grab-ai-office-furniture-v1'
+const KEY = 'grab-ai-office-furniture-v2'
 export function getPlacedFurniture(): PlacedFurniture[] {
   try { const value = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(value) ? value : [] } catch { return [] }
 }
