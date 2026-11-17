@@ -6,6 +6,7 @@ import { getPlacedFurniture, type PlacedFurniture } from '../lib/officeFurniture
 import { supabase } from '../lib/supabase'
 
 type Looks = Record<string, string>
+type HabboFurniture = { classname: string; name?: string; preview?: string; image?: string }
 type EmployeeId = (typeof EMPLOYEES)[number]['id']
 const LOOKS_KEY = 'grab-ai-agent-looks-v1'
 const DEFAULT_FIGURE = 'hd-180-1.ch-210-66.lg-270-82.sh-290-80'
@@ -34,32 +35,33 @@ export default function Office() {
   }, [])
   useEffect(() => { setFigure(looks[agentId] || DEFAULT_FIGURE) }, [agentId, looks])
   useEffect(() => {
-    if (furniture.length || building || !supabase) return
+    const client = supabase
+    if (furniture.length || building || !client) return
     let cancelled = false
     const build = async () => {
       setBuilding(true); setBuildError('')
       try {
         const terms = ['desk', 'chair', 'computer', 'table', 'plant', 'sofa']
-        const responses = await Promise.all(terms.map(search => supabase.functions.invoke('habbo-assets', {
+        const responses = await Promise.all(terms.map(search => client.functions.invoke('habbo-assets', {
           body: { action: 'list', search, page: 1, perPage: 30, hotelId: 1 },
         })))
         if (cancelled) return
-        const pools = responses.map(response => {
+        const pools: HabboFurniture[][] = responses.map(response => {
           if (response.error) throw new Error(response.error.message)
           const payload = response.data?.data
           const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : []
-          return rows.filter(item => item.classname)
+          return (rows as HabboFurniture[]).filter((item: HabboFurniture) => item.classname)
         })
-        const pick = (index, words) => pools[index].find(item => words.some(word => (item.name || item.classname || '').toLowerCase().includes(word))) || pools[index][0]
+        const pick = (index: number, words: string[]): HabboFurniture | undefined => pools[index].find((item: HabboFurniture) => words.some((word: string) => (item.name || item.classname || '').toLowerCase().includes(word))) || pools[index][0]
         const desk = pick(0, ['desk', 'office'])
         const chair = pick(1, ['chair', 'seat'])
         const computer = pick(2, ['computer', 'pc', 'monitor'])
         const table = pick(3, ['meeting', 'table'])
         const plant = pick(4, ['plant', 'tree'])
         const sofa = pick(5, ['sofa', 'couch'])
-        const imageFor = item => item.preview || item.image || 'https://www.habboassets.com/imaging/furniture/' + encodeURIComponent(item.classname) + '.png'
-        const make = (item, x, y, size) => ({ id: item.classname + '-' + x + '-' + y, classname: item.classname, name: item.name || item.classname, image: imageFor(item), x, y, size })
-        const layout = []
+        const imageFor = (item: HabboFurniture): string => item.preview || item.image || 'https://www.habboassets.com/imaging/furniture/' + encodeURIComponent(item.classname) + '.png'
+        const make = (item: HabboFurniture, x: number, y: number, size: number): PlacedFurniture => ({ id: item.classname + '-' + x + '-' + y, classname: item.classname, name: item.name || item.classname, image: imageFor(item), x, y, size })
+        const layout: PlacedFurniture[] = []
         for (let i=0;i<8;i++) {
           const x = 12 + (i%4)*25, y = i<4 ? 26 : 54
           if (desk) layout.push(make(desk,x,y,94))
