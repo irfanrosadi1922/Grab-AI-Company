@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { addPlacedFurniture } from '../lib/officeFurniture'
 import { Search, RefreshCw, Package, ExternalLink, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react'
 import { PageHeader, Card, Badge, Button } from '../components/ui'
 import { supabase } from '../lib/supabase'
@@ -21,6 +23,8 @@ const inputClass = 'h-10 w-full rounded-ctl border border-line bg-canvas px-3 te
 const buttonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-ctl border border-line px-3 text-sm font-medium hover:bg-raised disabled:opacity-50'
 
 export default function HabboAssetsPage() {
+  const navigate = useNavigate()
+  const [placedMessage, setPlacedMessage] = useState('')
   const [items, setItems] = useState<Furniture[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
@@ -150,6 +154,12 @@ export default function HabboAssetsPage() {
             <p><span className="text-mute">Kategori:</span> {selected.category || selected.type || '—'}</p>
             <p><span className="text-mute">Deskripsi:</span> {selected.description || 'Tidak ada deskripsi.'}</p>
             {selected.classname && <a className="inline-flex items-center gap-1 text-brand underline" href={`https://www.habboassets.com/furniture/${encodeURIComponent(selected.classname)}`} target="_blank" rel="noreferrer">Buka di HabboAssets <ExternalLink size={13} /></a>}
+            {selected.classname && <button className="mt-2 flex h-11 w-full items-center justify-center rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas hover:opacity-90" onClick={() => {
+              const added = addPlacedFurniture({ classname: selected.classname!, name: selected.name || selected.classname!, image: imageFor(selected) })
+              setPlacedMessage(added ? 'Furniture ditambahkan ke kantor bersama.' : 'Furniture ini sudah ada di kantor.')
+              if (added) { setSelected(null); navigate('/office') }
+            }}>Tempatkan di Kantor 3D</button>}
+            {placedMessage && <p className="text-xs text-mute">{placedMessage}</p>}
           </div>
         </div>
       </div>}
