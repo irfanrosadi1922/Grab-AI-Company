@@ -14,7 +14,8 @@ type Furniture = {
   preview?: string
   image?: string
 }
-type ApiResult = { data?: { data?: Furniture[]; meta?: { total?: number } } | Furniture; error?: string; message?: string; status?: number }
+type ApiPayload = Furniture[] | { data?: Furniture[]; meta?: { total?: number } } | Furniture
+type ApiResult = { data?: ApiPayload; error?: string; message?: string; status?: number }
 
 const inputClass = 'h-10 w-full rounded-ctl border border-line bg-canvas px-3 text-sm outline-none focus:border-brand'
 const buttonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-ctl border border-line px-3 text-sm font-medium hover:bg-raised disabled:opacity-50'
@@ -58,10 +59,11 @@ export default function HabboAssetsPage() {
       }
       if (data?.error) throw new Error(`${data.error}${data.status ? ` (HTTP ${data.status})` : ''}: ${data.message || 'Permintaan gagal'}`)
       const payload = data?.data
-      const rows = Array.isArray(payload) ? payload : payload?.data
+      const rows = Array.isArray(payload) ? payload : payload && 'data' in payload ? payload.data : undefined
       if (!Array.isArray(rows)) throw new Error('Format data dari HabboAssets tidak sesuai. Respons API tidak berisi daftar furniture.')
+      const meta = payload && !Array.isArray(payload) && 'meta' in payload ? payload.meta : undefined
       setItems(rows)
-      setTotal(Array.isArray(payload) ? rows.length : Number(payload?.meta?.total ?? rows.length))
+      setTotal(Number(meta?.total ?? rows.length))
       setPage(nextPage)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Tidak dapat mengambil katalog HabboAssets.')
@@ -134,7 +136,7 @@ export default function HabboAssetsPage() {
       </div>
 
       {items.length > 0 && <div className="flex items-center justify-between">
-        <Button variant="secondary" onClick={() => void load(Math.max(1, page - 1))} disabled={page <= 1 || loading} icon={ChevronLeft}>Sebelumnya</Button>
+        <Button variant="outline" onClick={() => void load(Math.max(1, page - 1))} disabled={page <= 1 || loading} icon={ChevronLeft}>Sebelumnya</Button>
         <span className="text-xs text-mute">Halaman {page}</span>
         <Button variant="secondary" onClick={() => void load(page + 1)} disabled={loading || (total > 0 && page * 24 >= total)} icon={ChevronRight}>Berikutnya</Button>
       </div>}
