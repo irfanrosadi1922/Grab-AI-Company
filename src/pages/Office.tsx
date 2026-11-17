@@ -95,29 +95,16 @@ export default function Office() {
   }
 
   return <div className="space-y-4">
-    <PageHeader title="Kantor" desc="Atur tata letak kantor dan pilih tampilan setiap agen AI." />
+    <PageHeader title="Kantor" desc="Susun kantor menggunakan furniture asli dari Habbo Asset Library." />
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-        <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture · sentuh lalu geser</p></div>
+        <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture Habbo · sentuh lalu geser</p></div>
         <div className="flex items-center gap-2"><button type="button" aria-label="Perkecil kanvas" onClick={()=>setZoom(z=>Math.max(.5,+(z-.15).toFixed(2)))} className="rounded-lg border border-line bg-card p-2"><ZoomOut size={16}/></button><span className="min-w-10 text-center text-xs tabular-nums">{Math.round(zoom*100)}%</span><button type="button" aria-label="Perbesar kanvas" onClick={()=>setZoom(z=>Math.min(2.5,+(z+.15).toFixed(2)))} className="rounded-lg border border-line bg-card p-2"><ZoomIn size={16}/></button><button type="button" aria-label="Reset zoom" onClick={()=>setZoom(1)} className="rounded-lg border border-line bg-card p-2"><RotateCcw size={16}/></button></div>
         {selected && <Button size="sm" variant="danger" icon={Trash2} onClick={()=>{saveFurniture(furniture.filter(x=>x.classname!==selected));setSelected(null)}}>Hapus pilihan</Button>}
       </div>
       <div ref={canvas} onPointerDown={handleCanvasPointerDown} onPointerMove={handleCanvasPointerMove} onPointerUp={handleCanvasPointerUp} onPointerCancel={handleCanvasPointerUp} className="relative min-h-[58dvh] overflow-hidden bg-white" style={{backgroundImage:'linear-gradient(#d9d5cc 1px, transparent 1px),linear-gradient(90deg,#d9d5cc 1px,transparent 1px)',backgroundSize:`${24*zoom}px ${24*zoom}px`,touchAction:'none'}}>
         <div className="absolute inset-0 origin-center" style={{transform:`scale(${zoom})`}}>
-          <div className="absolute left-[3%] right-[3%] top-[3%] flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <div><p className="text-[10px] font-bold tracking-[0.22em] text-slate-500">GRAB AI COMPANY</p><p className="text-sm font-bold text-slate-800">AI Operations Office</p></div>
-            <span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">TEAM WORKSPACE</span>
-          </div>
-          <div className="absolute left-[3%] right-[3%] top-[17%] h-[37%] rounded-2xl border-2 border-slate-200 bg-slate-50/80">
-            <p className="absolute left-3 top-2 text-[9px] font-bold tracking-wider text-slate-400">TEAM WORKSTATIONS</p>
-            {EMPLOYEES.map((employee,i)=>{const pos=[{x:13,y:39},{x:37,y:39},{x:63,y:39},{x:87,y:39},{x:13,y:78},{x:37,y:78},{x:63,y:78},{x:87,y:78}][i];return <div key={employee.id} className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{left:pos.x+"%",top:pos.y+"%"}}><div className="flex h-9 w-12 items-center justify-center rounded-lg border border-slate-300 bg-white text-xl shadow-sm">🖥️</div><div className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-center shadow-sm"><p className="text-[9px] font-bold text-slate-800">{employee.name}</p><p className="max-w-[76px] truncate text-[8px] text-slate-500">{employee.role}</p></div></div>})}
-          </div>
-          <div className="absolute bottom-[5%] left-[3%] flex h-[23%] w-[43%] flex-col items-center justify-center rounded-2xl border-2 border-amber-200 bg-amber-50">
-            <span className="text-2xl">🪑</span><p className="mt-1 text-[10px] font-bold text-amber-900">MEETING ROOM</p><p className="text-[8px] text-amber-700">Team briefing &amp; planning</p><div className="mt-2 flex gap-2 text-lg">🪑　🪑　🪑</div>
-          </div>
-          <div className="absolute bottom-[5%] right-[3%] flex h-[23%] w-[43%] flex-col items-center justify-center rounded-2xl border-2 border-indigo-200 bg-indigo-50">
-            <span className="text-2xl">👑</span><p className="mt-1 text-[10px] font-bold text-indigo-900">DIRECTOR OFFICE · JOKO</p><p className="text-[8px] text-indigo-700">AI Managing Director</p><div className="mt-1 text-lg">🖥️　🪴</div>
-          </div>
+          {furniture.length === 0 && <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"><p className="text-sm font-semibold text-slate-700">Kanvas masih kosong</p><p className="mt-1 max-w-xs text-xs text-slate-500">Buka Habbo Asset Library, pilih furniture, lalu tekan “Tempatkan di Kantor”.</p><a href="/assets" className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white">Buka Habbo Asset Library</a></div>}
           {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>setSelected(item.classname)} aria-label={"Pindahkan "+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===item.classname?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:(item.x??(20+(i%4)*20))+"%",top:(item.y??(25+Math.floor(i/4)*22))+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={item.image} alt={item.name} draggable={false} className="pointer-events-none h-[78%] w-full object-contain"/><span className="mt-1 line-clamp-1 w-full text-[10px] text-[#45423c]">{item.name}</span>{selected===item.classname&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-2 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Perkecil" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.classname,-16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Minus size={16}/></button><button type="button" aria-label="Perbesar" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.classname,16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Plus size={16}/></button></div>}</div>})}
         </div>
       </div>
