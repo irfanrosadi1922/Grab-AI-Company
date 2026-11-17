@@ -158,7 +158,7 @@ export default function HabboAssetsPage() {
               const added = addPlacedFurniture({ classname: selected.classname!, name: selected.name || selected.classname!, image: imageFor(selected) })
               setPlacedMessage(added ? 'Furniture ditambahkan ke kantor bersama.' : 'Furniture ini sudah ada di kantor.')
               if (added) { setSelected(null); navigate('/office') }
-            }}>Tempatkan di Kantor 3D</button>}
+            }}>Tempatkan di Kantor</button>}
             {placedMessage && <p className="text-xs text-mute">{placedMessage}</p>}
           </div>
         </div>
