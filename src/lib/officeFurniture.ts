@@ -1,4 +1,4 @@
-export type PlacedFurniture = { classname: string; name: string; image: string }
+export type PlacedFurniture = { classname: string; name: string; image: string; x?: number; y?: number }
 const KEY = 'grab-ai-office-furniture-v2'
 export function getPlacedFurniture(): PlacedFurniture[] {
   try { const value = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(value) ? value : [] } catch { return [] }
