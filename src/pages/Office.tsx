@@ -190,6 +190,7 @@ export default function Office() {
 
   return <div className="space-y-4">
     <PageHeader title="Kantor" desc="Susun kantor menggunakan furniture asli dari Habbo Asset Library." />
+    <div className="flex justify-end"><a href="/assets" className="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas"><Plus size={16}/> Tambah furniture dari Asset Library</a></div>
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture Habbo · sentuh lalu geser</p></div>
