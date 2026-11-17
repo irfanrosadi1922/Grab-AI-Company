@@ -63,7 +63,7 @@ export default function Office() {
     const build = async () => {
       setBuilding(true); setBuildError('')
       try {
-        const terms = ['desk', 'chair', 'computer', 'table', 'plant', 'sofa']
+        const terms = ['desk', 'chair', 'computer', 'table', 'plant', 'sofa', 'partition']
         const responses = await Promise.all(terms.map(search => client.functions.invoke('habbo-assets', {
           body: { action: 'list', search, page: 1, perPage: 30, hotelId: 1 },
         })))
@@ -81,6 +81,7 @@ export default function Office() {
         const table = pick(3, ['meeting', 'table'])
         const plant = pick(4, ['plant', 'tree'])
         const sofa = pick(5, ['sofa', 'couch'])
+        const partition = pick(6, ['partition', 'screen', 'divider', 'room divider'])
         const imageFor = (item: HabboFurniture): string => item.preview || item.image || 'https://www.habboassets.com/imaging/furniture/' + encodeURIComponent(item.classname) + '.png'
         const make = (item: HabboFurniture, x: number, y: number, size: number): PlacedFurniture => ({ id: item.classname + '-' + x + '-' + y, classname: item.classname, name: item.name || item.classname, image: imageFor(item), x, y, size })
         const layout: PlacedFurniture[] = []
@@ -89,6 +90,10 @@ export default function Office() {
           if (desk) layout.push(make(desk,x,y,94))
           if (chair) layout.push(make(chair,x,y+10,62))
           if (computer) layout.push(make(computer,x,y-7,54))
+          if (partition) {
+            if (i%4!==3) layout.push(make(partition,x+12,y+9,58))
+            if (i<4) layout.push(make(partition,x+12,y+25,58))
+          }
         }
         if (table) layout.push(make(table,22,83,130), make(table,75,83,118))
         if (sofa) layout.push(make(sofa,48,83,105))
