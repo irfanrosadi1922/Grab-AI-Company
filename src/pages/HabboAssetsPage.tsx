@@ -138,7 +138,7 @@ export default function HabboAssetsPage() {
       {items.length > 0 && <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => void load(Math.max(1, page - 1))} disabled={page <= 1 || loading} icon={ChevronLeft}>Sebelumnya</Button>
         <span className="text-xs text-mute">Halaman {page}</span>
-        <Button variant="secondary" onClick={() => void load(page + 1)} disabled={loading || (total > 0 && page * 24 >= total)} icon={ChevronRight}>Berikutnya</Button>
+        <Button variant="outline" onClick={() => void load(page + 1)} disabled={loading || (total > 0 && page * 24 >= total)} icon={ChevronRight}>Berikutnya</Button>
       </div>}
 
       {selected && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" onClick={() => setSelected(null)}>
