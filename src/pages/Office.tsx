@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Users, Trash2, UserRound, Save, Plus, Minus, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { Trash2, UserRound, Save, Plus, Minus, ZoomIn, ZoomOut, RotateCcw, RotateCw, Play, Pause } from 'lucide-react'
 import { Avatar, Button, Card, PageHeader } from '../components/ui'
 import { EMPLOYEES } from '../data/employees'
 import { getPlacedFurniture, type PlacedFurniture } from '../lib/officeFurniture'
@@ -22,6 +22,7 @@ export default function Office() {
   const [zoom, setZoom] = useState(1)
   const [building, setBuilding] = useState(false)
   const [buildError, setBuildError] = useState('')
+  const [statePlaying, setStatePlaying] = useState(false)
   const pointers = useRef<Map<number, {x:number;y:number}>>(new Map())
   const pinchStart = useRef<{distance:number;zoom:number}|null>(null)
   const canvas = useRef<HTMLDivElement>(null)
@@ -34,6 +35,35 @@ export default function Office() {
     return () => window.removeEventListener('office-furniture-updated', refresh)
   }, [])
   useEffect(() => { setFigure(looks[agentId] || DEFAULT_FIGURE) }, [agentId, looks])
+  useEffect(() => {
+    const item = furniture.find(x => (x.id || x.classname) === selected)
+    if (!item || item.states || !supabase) return
+    let active = true
+    void supabase.functions.invoke('habbo-assets', { body: { action: 'imagingInfo', classname: item.classname } }).then(({ data, error }) => {
+      if (!active || error) return
+      const info = data?.data
+      const count = Number(info?.states ?? info?.state_count ?? info?.meta?.states ?? 1)
+      if (Number.isFinite(count) && count > 1) {
+        const next = furniture.map(x => (x.id || x.classname) === selected ? { ...x, states: Math.min(32, count) } : x)
+        localStorage.setItem('grab-ai-office-furniture-v2', JSON.stringify(next)); setFurniture(next)
+      }
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [selected, furniture])
+  useEffect(() => {
+    if (!statePlaying || !selected) return
+    const timer = window.setInterval(() => {
+      setFurniture(current => {
+        const next = current.map(item => {
+          if ((item.id || item.classname) !== selected || (item.states || 1) < 2) return item
+          return { ...item, state: ((item.state || 0) + 1) % (item.states || 1) }
+        })
+        localStorage.setItem('grab-ai-office-furniture-v2', JSON.stringify(next))
+        return next
+      })
+    }, 900)
+    return () => window.clearInterval(timer)
+  }, [statePlaying, selected])
   useEffect(() => {
     const client = supabase
     if (furniture.length || building || !client) return
@@ -86,6 +116,12 @@ export default function Office() {
   }, [furniture.length])
 
 
+  const selectedItem = furniture.find(item => (item.id || item.classname) === selected)
+  const updateSelected = (patch: Partial<PlacedFurniture>) => {
+    if (!selected) return
+    saveFurniture(furniture.map(item => (item.id || item.classname) === selected ? { ...item, ...patch } : item))
+  }
+  const furnitureImage = (item: PlacedFurniture) => `https://www.habboassets.com/imaging/furniture/${encodeURIComponent(item.classname)}.png?direction=${item.direction ?? 2}&state=${item.state ?? 0}`
   const saveFurniture = (next: PlacedFurniture[]) => {
     localStorage.setItem('grab-ai-office-furniture-v2', JSON.stringify(next))
     setFurniture(next)
@@ -155,12 +191,12 @@ export default function Office() {
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture Habbo · sentuh lalu geser</p></div>
         <div className="flex items-center gap-2"><button type="button" aria-label="Perkecil kanvas" onClick={()=>setZoom(z=>Math.max(.5,+(z-.15).toFixed(2)))} className="rounded-lg border border-line bg-card p-2"><ZoomOut size={16}/></button><span className="min-w-10 text-center text-xs tabular-nums">{Math.round(zoom*100)}%</span><button type="button" aria-label="Perbesar kanvas" onClick={()=>setZoom(z=>Math.min(2.5,+(z+.15).toFixed(2)))} className="rounded-lg border border-line bg-card p-2"><ZoomIn size={16}/></button><button type="button" aria-label="Reset zoom" onClick={()=>setZoom(1)} className="rounded-lg border border-line bg-card p-2"><RotateCcw size={16}/></button></div>
-        {selected && <Button size="sm" variant="danger" icon={Trash2} onClick={()=>{saveFurniture(furniture.filter(x=>(x.id || x.classname)!==selected));setSelected(null)}}>Hapus pilihan</Button>}
+        {selected && <div className="flex flex-wrap items-center gap-1.5"><button type="button" title="Putar arah furniture" onClick={()=>updateSelected({direction:((selectedItem?.direction ?? 2)+1)%8})} className="rounded-lg border border-line bg-card p-2"><RotateCw size={16}/></button><span className="text-[10px] text-mute">Arah {selectedItem?.direction ?? 2}</span><button type="button" title="State sebelumnya" onClick={()=>updateSelected({state:Math.max(0,(selectedItem?.state ?? 0)-1)})} className="rounded-lg border border-line bg-card p-2"><Minus size={16}/></button><span className="text-[10px] text-mute">State {selectedItem?.state ?? 0}/{Math.max(0,(selectedItem?.states ?? 1)-1)}</span><button type="button" title="State berikutnya" onClick={()=>updateSelected({state:((selectedItem?.state ?? 0)+1)%(selectedItem?.states ?? 1)})} disabled={(selectedItem?.states ?? 1)<2} className="rounded-lg border border-line bg-card p-2 disabled:opacity-40"><Plus size={16}/></button><button type="button" title="Putar animasi state" onClick={()=>setStatePlaying(v=>!v)} disabled={(selectedItem?.states ?? 1)<2} className="rounded-lg border border-line bg-card p-2 disabled:opacity-40">{statePlaying?<Pause size={16}/>:<Play size={16}/>}</button><Button size="sm" variant="danger" icon={Trash2} onClick={()=>{saveFurniture(furniture.filter(x=>(x.id || x.classname)!==selected));setSelected(null);setStatePlaying(false)}}>Hapus</Button></div>}
       </div>
       <div ref={canvas} onPointerDown={handleCanvasPointerDown} onPointerMove={handleCanvasPointerMove} onPointerUp={handleCanvasPointerUp} onPointerCancel={handleCanvasPointerUp} className="relative min-h-[58dvh] overflow-hidden bg-white" style={{backgroundImage:'linear-gradient(#d9d5cc 1px, transparent 1px),linear-gradient(90deg,#d9d5cc 1px,transparent 1px)',backgroundSize:`${24*zoom}px ${24*zoom}px`,touchAction:'none'}}>
         <div className="absolute inset-0 origin-center" style={{transform:`scale(${zoom})`}}>
           {furniture.length === 0 && <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"><p className="text-sm font-semibold text-slate-700">{building ? 'Mengambil furniture asli dari Habbo Asset Library…' : 'Kanvas kantor belum terisi'}</p><p className="mt-1 max-w-xs text-xs text-slate-500">{buildError || 'Kantor sedang disusun menggunakan aset Habbo.'}</p><a href="/assets" className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white">Buka Habbo Asset Library</a></div>}
-          {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.id || item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>setSelected(item.id || item.classname)} aria-label={"Pindahkan "+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===(item.id || item.classname)?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:(item.x??(20+(i%4)*20))+"%",top:(item.y??(25+Math.floor(i/4)*22))+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={item.image} alt={item.name} draggable={false} className="pointer-events-none h-[78%] w-full object-contain"/><span className="mt-1 line-clamp-1 w-full text-[10px] text-[#45423c]">{item.name}</span>{selected===(item.id || item.classname)&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-2 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Perkecil" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,-16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Minus size={16}/></button><button type="button" aria-label="Perbesar" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Plus size={16}/></button></div>}</div>})}
+          {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.id || item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>{setSelected(item.id || item.classname);setStatePlaying(false)}} aria-label={"Pindahkan "+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===(item.id || item.classname)?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:(item.x??(20+(i%4)*20))+"%",top:(item.y??(25+Math.floor(i/4)*22))+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={furnitureImage(item)} alt={item.name} draggable={false} className="pointer-events-none h-[78%] w-full object-contain"/><span className="mt-1 line-clamp-1 w-full text-[10px] text-[#45423c]">{item.name}</span>{selected===(item.id || item.classname)&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-2 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Perkecil" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,-16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Minus size={16}/></button><button type="button" aria-label="Perbesar" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,16)}} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-800"><Plus size={16}/></button></div>}</div>})}
         </div>
       </div>
     </Card>
