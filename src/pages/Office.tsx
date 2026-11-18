@@ -146,10 +146,11 @@ export default function Office() {
     if (!supabase) {
       setBuildError('Supabase belum dikonfigurasi.'); return
     }
+    const client = supabase
     setBuilding(true); setBuildError('')
     try {
       const terms = ['desk', 'chair', 'computer', 'meeting table', 'plant', 'sofa', 'partition']
-      const responses = await Promise.all(terms.map(search => supabase.functions.invoke('habbo-assets', {
+      const responses = await Promise.all(terms.map(search => client.functions.invoke('habbo-assets', {
         body: { action: 'list', search, page: 1, perPage: 40, hotelId: 1 },
       })))
       const pools: HabboFurniture[][] = responses.map(response => {
