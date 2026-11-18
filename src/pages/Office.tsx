@@ -111,18 +111,16 @@ export default function Office() {
         const make = (item: HabboFurniture, x: number, y: number, size: number): PlacedFurniture => ({ id: item.classname + '-' + x + '-' + y, classname: item.classname, name: item.name || item.classname, image: imageFor(item), x, y, size })
         const layout: PlacedFurniture[] = []
         for (let i=0;i<8;i++) {
-          const x = 12 + (i%4)*25, y = i<4 ? 26 : 54
+          const x = [16, 39, 61, 84][i%4], y = i<4 ? 31 : 59
           if (desk) layout.push(make(desk,x,y,94))
           if (chair) layout.push(make(chair,x,y+10,62))
           if (computer) layout.push(make(computer,x,y-7,54))
-          if (partition) {
-            if (i%4!==3) layout.push(make(partition,x+12,y+9,58))
-            if (i<4) layout.push(make(partition,x+12,y+25,58))
-          }
+          if (partition && (i%4===1 || i%4===2)) layout.push(make(partition,x+(i%4===1?10:-10),y+13,54))
         }
-        if (table) layout.push(make(table,22,83,130), make(table,75,83,118))
-        if (sofa) layout.push(make(sofa,48,83,105))
-        if (plant) layout.push(make(plant,5,8,68), make(plant,94,8,68))
+        if (table) layout.push(make(table,50,86,142))
+        if (desk) layout.push(make(desk,14,86,112))
+        if (sofa) layout.push(make(sofa,85,86,118))
+        if (plant) layout.push(make(plant,7,10,72), make(plant,93,10,72), make(plant,7,69,62), make(plant,93,69,62))
         if (!layout.length) throw new Error('Tidak ada furniture yang ditemukan di Habbo Asset Library.')
         if (!cancelled) {
           localStorage.setItem('grab-ai-office-furniture-v2', JSON.stringify(layout))
@@ -204,8 +202,8 @@ export default function Office() {
         })
       }
       const stations = [
-        { x: 18, y: 29 }, { x: 39, y: 29 }, { x: 60, y: 29 }, { x: 81, y: 29 },
-        { x: 18, y: 58 }, { x: 39, y: 58 }, { x: 60, y: 58 }, { x: 81, y: 58 },
+        { x: 16, y: 31 }, { x: 39, y: 31 }, { x: 61, y: 31 }, { x: 84, y: 31 },
+        { x: 16, y: 59 }, { x: 39, y: 59 }, { x: 61, y: 59 }, { x: 84, y: 59 },
       ]
       stations.forEach((point, index) => {
         put(desk, point.x, point.y, 100, 'desk-' + index)
@@ -213,11 +211,13 @@ export default function Office() {
         put(computer, point.x, point.y - 6, 50, 'computer-' + index)
         if (index % 4 !== 3) put(partition, point.x + 10, point.y + 12, 58, 'partition-' + index)
       })
-      put(desk, 12, 84, 112, 'reception')
-      put(table, 48, 84, 128, 'meeting')
-      put(sofa, 82, 84, 108, 'lounge')
-      put(plant, 5, 9, 70, 'plant-left')
-      put(plant, 94, 9, 70, 'plant-right')
+      put(desk, 14, 86, 112, 'reception')
+      put(table, 50, 86, 142, 'meeting')
+      put(sofa, 85, 86, 118, 'lounge')
+      put(plant, 7, 10, 72, 'plant-left-top')
+      put(plant, 93, 10, 72, 'plant-right-top')
+      put(plant, 7, 69, 62, 'plant-left-bottom')
+      put(plant, 93, 69, 62, 'plant-right-bottom')
       if (!next.length) throw new Error('HabboAssets tidak mengembalikan furniture untuk kantor.')
       saveFurniture(next)
       setSelected(null)
@@ -341,7 +341,7 @@ export default function Office() {
           <div className="pointer-events-none absolute z-[20] left-[5%] top-[10%] rounded-md bg-[#243b48]/90 px-3 py-1 text-xs font-bold text-white">RECEPTION</div>
           <div className="pointer-events-none absolute z-[20] left-[43%] top-[10%] rounded-md bg-[#243b48]/90 px-3 py-1 text-xs font-bold text-white">MEETING ROOM</div>
           <div className="pointer-events-none absolute z-[20] left-[77%] top-[10%] rounded-md bg-[#243b48]/90 px-3 py-1 text-xs font-bold text-white">LOUNGE</div>
-          {EMPLOYEES.map((employee,index)=>{const x=[17,37,57,77][index%4],y=index<4?18:48;const look=looks[employee.id]||DEFAULT_LOOKS[employee.id]||DEFAULT_FIGURE;return <div key={employee.id} className="pointer-events-none absolute z-[20] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{left:x+"%",top:y+"%"}}><img src={avatarUrl(look)} alt={employee.name} className="h-24 w-16 object-contain drop-shadow-lg"/><span className="rounded-md border border-white/30 bg-[#172c35]/95 px-2 py-1 text-[11px] font-bold text-white shadow">{employee.name}</span></div>})}
+          {EMPLOYEES.map((employee,index)=>{const x=[16,39,61,84][index%4],y=index<4?19:47;const look=looks[employee.id]||DEFAULT_LOOKS[employee.id]||DEFAULT_FIGURE;return <div key={employee.id} className="pointer-events-none absolute z-[20] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{left:x+"%",top:y+"%"}}><img src={avatarUrl(look)} alt={employee.name} className="h-24 w-16 object-contain drop-shadow-lg"/><span className="rounded-md border border-white/30 bg-[#172c35]/95 px-2 py-1 text-[11px] font-bold text-white shadow">{employee.name}</span></div>})}
 
         </div>
       </div>
