@@ -10,9 +10,19 @@ type HabboFurniture = { classname: string; name?: string; preview?: string; imag
 type EmployeeId = (typeof EMPLOYEES)[number]['id']
 const LOOKS_KEY = 'grab-ai-agent-looks-v1'
 const DEFAULT_FIGURE = 'hd-180-1.ch-210-66.lg-270-82.sh-290-80'
+const DEFAULT_LOOKS: Looks = {
+  alex: 'hd-180-1.hr-115-45.ch-5204-82.lg-270-64.sh-290-91',
+  daniel: 'sh-290-93.lg-285-92.hr-831-49.ch-3001-93-1408.ea-1406-1408.hd-180-1.ca-1813-63.ha-3272-93-92',
+  sophia: 'sh-290-93.lg-285-92.hr-831-49.ea-1406-1408.hd-180-1.ca-5410-82.ha-3272-93-92.ch-5585',
+  olivia: 'sh-290-93.lg-285-92.hr-831-49.ch-3001-93-1408.ea-1406-1408.hd-180-1.ha-3272-93-92.ca-6238-82-1408',
+  ethan: 'hr-832-38.hd-615-8.ch-822-96.lg-700-64.sh-3206-1338.ha-1012-93.ea-1406',
+  isabella: 'hd-180-14.ch-806-73.lg-270-82.sh-3035-92.ha-1002-82.ea-1406',
+  william: 'sh-290-93.lg-285-92.hr-831-49.ch-3001-93-1408.ea-1406-1408.hd-180-1.ha-3272-93-92.ca-5410-82',
+  james: 'sh-290-93.lg-285-92.hr-831-49.ch-5585.ea-1406-1408.hd-180-1.ha-3272-93-92.ca-6238-82-1408',
+}
 const OFFICE_ZOOM_KEY = 'grab-ai-office-canvas-zoom-v1'
 const readOfficeZoom = () => { try { const value = Number(localStorage.getItem(OFFICE_ZOOM_KEY)); return Number.isFinite(value) && value >= .5 && value <= 2.5 ? value : 1 } catch { return 1 } }
-const readLooks = (): Looks => { try { return JSON.parse(localStorage.getItem(LOOKS_KEY) || '{}') as Looks } catch { return {} } }
+const readLooks = (): Looks => { try { return { ...DEFAULT_LOOKS, ...(JSON.parse(localStorage.getItem(LOOKS_KEY) || '{}') as Looks) } } catch { return { ...DEFAULT_LOOKS } } }
 const avatarUrl = (figure: string) => 'https://www.habboassets.com/imaging/avatar.png?figure=' + encodeURIComponent(figure) + '&direction=2&size=l'
 
 export default function Office() {
