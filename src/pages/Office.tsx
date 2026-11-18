@@ -42,6 +42,15 @@ export default function Office() {
   const drag = useRef<{ id: string; pointer: number; dx: number; dy: number } | null>(null)
 
   useEffect(() => {
+    if (!building) return
+    const watchdog = window.setTimeout(() => {
+      setBuilding(false)
+      setBuildError('Proses mengambil aset Habbo terhenti. Coba lagi; periksa koneksi dan fungsi HabboAssets.')
+    }, 45000)
+    return () => window.clearTimeout(watchdog)
+  }, [building])
+
+  useEffect(() => {
     const refresh = () => setFurniture(getPlacedFurniture())
     refresh(); setLooks(readLooks())
     window.addEventListener('office-furniture-updated', refresh)
