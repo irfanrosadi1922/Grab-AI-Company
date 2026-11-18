@@ -217,7 +217,10 @@ export default function Office() {
     const r=el.getBoundingClientRect()
     const x=((e.clientX-r.left+el.scrollLeft-d.dx)/(1800*zoom))*100
     const y=((e.clientY-r.top+el.scrollTop-d.dy)/(1200*zoom))*100
-    setFurniture(old=>old.map((it,i)=>(it.id || it.classname)===d.id?{...it,x,y}:it.x==null||it.y==null?{...it,x:20+(i%4)*20,y:25+Math.floor(i/4)*22}:it))
+    const activeItem = furniture.find(it => (it.id || it.classname) === d.id)
+    const movingIds = new Set([d.id, ...(activeItem?.groupId ? furniture.filter(it => it.groupId === activeItem.groupId).map(it => it.id || it.classname) : [])])
+    const dx = x - (activeItem?.x ?? 50), dy = y - (activeItem?.y ?? 50)
+    setFurniture(old=>old.map(it=>movingIds.has(it.id || it.classname)?{...it,x:Math.max(0,Math.min(100,(it.x??50)+dx)),y:Math.max(0,Math.min(100,(it.y??50)+dy))}:it))
   }
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drag.current || drag.current.pointer!==e.pointerId) return
