@@ -142,38 +142,68 @@ export default function Office() {
     window.dispatchEvent(new CustomEvent('office-furniture-updated'))
   }
 
-  const applyConceptLayout = () => {
-    const pick = (terms: string[]) => furniture.find(item => terms.some(term => (item.name + ' ' + item.classname).toLowerCase().includes(term)))
-    const desk = pick(['desk', 'office'])
-    const chair = pick(['chair', 'seat'])
-    const computer = pick(['computer', 'monitor', 'pc'])
-    const partition = pick(['partition', 'screen', 'divider'])
-    const table = pick(['meeting', 'table'])
-    const sofa = pick(['sofa', 'couch'])
-    const plant = pick(['plant', 'tree'])
-    const next: PlacedFurniture[] = []
-    const put = (item: PlacedFurniture | undefined, x: number, y: number, size: number, suffix: string) => {
-      if (!item) return
-      next.push({ ...item, id: 'concept-' + suffix + '-' + next.length, x, y, size })
+  const applyConceptLayout = async () => {
+    if (!supabase) {
+      setBuildError('Supabase belum dikonfigurasi.'); return
     }
-    const stations = [
-      { x: 18, y: 28 }, { x: 39, y: 28 }, { x: 60, y: 28 }, { x: 81, y: 28 },
-      { x: 18, y: 57 }, { x: 39, y: 57 }, { x: 60, y: 57 }, { x: 81, y: 57 },
-    ]
-    stations.forEach((point, index) => {
-      put(desk, point.x, point.y, 108, 'desk-' + index)
-      put(chair, point.x, point.y + 10, 62, 'chair-' + index)
-      put(computer, point.x, point.y - 7, 52, 'pc-' + index)
-      if (index % 4 !== 3) put(partition, point.x + 10, point.y + 12, 58, 'partition-' + index)
-    })
-    put(desk, 12, 83, 112, 'reception')
-    put(table, 48, 84, 128, 'meeting')
-    put(sofa, 82, 83, 108, 'lounge')
-    put(plant, 5, 8, 70, 'plant-left')
-    put(plant, 94, 8, 70, 'plant-right')
-    if (!next.length) return
-    saveFurniture(next)
-    setSelected(null)
+    setBuilding(true); setBuildError('')
+    try {
+      const terms = ['desk', 'chair', 'computer', 'meeting table', 'plant', 'sofa', 'partition']
+      const responses = await Promise.all(terms.map(search => supabase.functions.invoke('habbo-assets', {
+        body: { action: 'list', search, page: 1, perPage: 40, hotelId: 1 },
+      })))
+      const pools: HabboFurniture[][] = responses.map(response => {
+        if (response.error) throw new Error(response.error.message || 'Gagal mengambil katalog HabboAssets.')
+        const payload = response.data?.data
+        const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : []
+        return (rows as HabboFurniture[]).filter(item => item.classname)
+      })
+      const pick = (index: number, words: string[]): HabboFurniture | undefined =>
+        pools[index].find(item => words.some(word => (item.name || item.classname || '').toLowerCase().includes(word)))
+        || furniture.find(item => words.some(word => (item.name + ' ' + item.classname).toLowerCase().includes(word)))
+        || pools[index][0]
+      const desk = pick(0, ['desk', 'office'])
+      const chair = pick(1, ['chair', 'seat'])
+      const computer = pick(2, ['computer', 'pc', 'monitor'])
+      const table = pick(3, ['meeting', 'table'])
+      const plant = pick(4, ['plant', 'tree'])
+      const sofa = pick(5, ['sofa', 'couch'])
+      const partition = pick(6, ['partition', 'screen', 'divider'])
+      const imageFor = (item: HabboFurniture) => item.preview || item.image || 'https://www.habboassets.com/imaging/furniture/' + encodeURIComponent(item.classname) + '.png'
+      const next: PlacedFurniture[] = []
+      const put = (item: HabboFurniture | PlacedFurniture | undefined, x: number, y: number, size: number, suffix: string) => {
+        if (!item?.classname) return
+        next.push({
+          id: 'habbo-office-' + suffix + '-' + next.length,
+          classname: item.classname,
+          name: item.name || item.classname,
+          image: 'preview' in item && item.preview ? item.preview : 'image' in item && item.image ? item.image : imageFor(item as HabboFurniture),
+          x, y, size,
+        })
+      }
+      const stations = [
+        { x: 18, y: 29 }, { x: 39, y: 29 }, { x: 60, y: 29 }, { x: 81, y: 29 },
+        { x: 18, y: 58 }, { x: 39, y: 58 }, { x: 60, y: 58 }, { x: 81, y: 58 },
+      ]
+      stations.forEach((point, index) => {
+        put(desk, point.x, point.y, 112, 'desk-' + index)
+        put(chair, point.x, point.y + 10, 64, 'chair-' + index)
+        put(computer, point.x, point.y - 7, 54, 'computer-' + index)
+        if (index % 4 !== 3) put(partition, point.x + 10, point.y + 12, 58, 'partition-' + index)
+      })
+      put(desk, 12, 84, 112, 'reception')
+      put(table, 48, 84, 128, 'meeting')
+      put(sofa, 82, 84, 108, 'lounge')
+      put(plant, 5, 9, 70, 'plant-left')
+      put(plant, 94, 9, 70, 'plant-right')
+      if (!next.length) throw new Error('HabboAssets tidak mengembalikan furniture untuk kantor.')
+      saveFurniture(next)
+      setSelected(null)
+    } catch (error) {
+      setBuildError(error instanceof Error ? error.message : 'Gagal menyusun furniture dari Habbo Asset Library.')
+    } finally {
+      setBuilding(false)
+    }
   }
   const distance = (a:{x:number;y:number},b:{x:number;y:number}) => Math.hypot(a.x-b.x,a.y-b.y)
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -259,7 +289,7 @@ export default function Office() {
 
   return <div className="space-y-4">
     <PageHeader title="Kantor" desc="Susun kantor menggunakan furniture asli dari Habbo Asset Library." />
-    <div className="flex flex-wrap justify-end gap-2"><Button icon={RotateCcw} onClick={applyConceptLayout}>Terapkan desain Habbo Office</Button><a href="/assets" className="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas"><Plus size={16}/> Tambah furniture dari Asset Library</a></div>
+    <div className="flex flex-wrap justify-end gap-2"><Button icon={RotateCcw} onClick={() => void applyConceptLayout()} disabled={building}>{building ? "Mengambil aset Habbo..." : "Terapkan desain Habbo Office"}</Button><a href="/assets" className="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas"><Plus size={16}/> Tambah furniture dari Asset Library</a></div>
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture Habbo · sentuh lalu geser</p></div>
