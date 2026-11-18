@@ -52,8 +52,12 @@ export default function Office() {
   }, [building])
 
   useEffect(() => {
-    // Resetkan penempatan lama satu kali saat halaman kantor dibuka.
-    localStorage.setItem('grab-ai-office-furniture-v2', '[]')
+    // Bersihkan layout lama hanya sekali; jangan hapus furniture yang baru ditambahkan dari Asset Library.
+    const resetKey = 'grab-ai-office-canvas-cleared-v1'
+    if (localStorage.getItem(resetKey) !== 'done') {
+      localStorage.setItem('grab-ai-office-furniture-v2', '[]')
+      localStorage.setItem(resetKey, 'done')
+    }
     const refresh = () => setFurniture(getPlacedFurniture())
     refresh(); setLooks(readLooks())
     window.addEventListener('office-furniture-updated', refresh)
