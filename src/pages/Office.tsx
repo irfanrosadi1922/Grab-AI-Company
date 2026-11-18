@@ -141,6 +141,40 @@ export default function Office() {
     setFurniture(next)
     window.dispatchEvent(new CustomEvent('office-furniture-updated'))
   }
+
+  const applyConceptLayout = () => {
+    const pick = (terms: string[]) => furniture.find(item => terms.some(term => (item.name + ' ' + item.classname).toLowerCase().includes(term)))
+    const desk = pick(['desk', 'office'])
+    const chair = pick(['chair', 'seat'])
+    const computer = pick(['computer', 'monitor', 'pc'])
+    const partition = pick(['partition', 'screen', 'divider'])
+    const table = pick(['meeting', 'table'])
+    const sofa = pick(['sofa', 'couch'])
+    const plant = pick(['plant', 'tree'])
+    const next: PlacedFurniture[] = []
+    const put = (item: PlacedFurniture | undefined, x: number, y: number, size: number, suffix: string) => {
+      if (!item) return
+      next.push({ ...item, id: 'concept-' + suffix + '-' + next.length, x, y, size })
+    }
+    const stations = [
+      { x: 18, y: 28 }, { x: 39, y: 28 }, { x: 60, y: 28 }, { x: 81, y: 28 },
+      { x: 18, y: 57 }, { x: 39, y: 57 }, { x: 60, y: 57 }, { x: 81, y: 57 },
+    ]
+    stations.forEach((point, index) => {
+      put(desk, point.x, point.y, 108, 'desk-' + index)
+      put(chair, point.x, point.y + 10, 62, 'chair-' + index)
+      put(computer, point.x, point.y - 7, 52, 'pc-' + index)
+      if (index % 4 !== 3) put(partition, point.x + 10, point.y + 12, 58, 'partition-' + index)
+    })
+    put(desk, 12, 83, 112, 'reception')
+    put(table, 48, 84, 128, 'meeting')
+    put(sofa, 82, 83, 108, 'lounge')
+    put(plant, 5, 8, 70, 'plant-left')
+    put(plant, 94, 8, 70, 'plant-right')
+    if (!next.length) return
+    saveFurniture(next)
+    setSelected(null)
+  }
   const distance = (a:{x:number;y:number},b:{x:number;y:number}) => Math.hypot(a.x-b.x,a.y-b.y)
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -225,7 +259,7 @@ export default function Office() {
 
   return <div className="space-y-4">
     <PageHeader title="Kantor" desc="Susun kantor menggunakan furniture asli dari Habbo Asset Library." />
-    <div className="flex justify-end"><a href="/assets" className="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas"><Plus size={16}/> Tambah furniture dari Asset Library</a></div>
+    <div className="flex flex-wrap justify-end gap-2"><Button icon={RotateCcw} onClick={applyConceptLayout}>Terapkan desain Habbo Office</Button><a href="/assets" className="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas"><Plus size={16}/> Tambah furniture dari Asset Library</a></div>
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture Habbo · sentuh lalu geser</p></div>
@@ -233,9 +267,17 @@ export default function Office() {
 
       </div>
       <div ref={canvas} onPointerDown={handleCanvasPointerDown} onPointerMove={handleCanvasPointerMove} onPointerUp={handleCanvasPointerUp} onPointerCancel={handleCanvasPointerUp} className="relative h-[72dvh] overflow-auto" style={{backgroundColor:"#171a22",backgroundImage:'linear-gradient(45deg, rgba(255,255,255,.10) 1px, transparent 1px),linear-gradient(-45deg, rgba(255,255,255,.10) 1px, transparent 1px)',backgroundSize:`${36*zoom}px ${36*zoom}px`,backgroundPosition:"center center",touchAction:'none'}}>
-        <div className="relative origin-top-left" style={{width:"4000%", height:"4000dvh", minWidth:"4000%", transform:`scale(${zoom})`, transformOrigin:"top left"}}>
+        <div className="relative origin-top-left overflow-hidden" style={{width:"4000%", height:"4000dvh", minWidth:"4000%", transform:`scale(${zoom})`, transformOrigin:"top left", backgroundColor:"#c9c3b5", backgroundImage:"linear-gradient(45deg, rgba(255,255,255,.18) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.18) 75%),linear-gradient(45deg, rgba(255,255,255,.18) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.18) 75%)", backgroundSize:"48px 48px", backgroundPosition:"0 0,24px 24px"}}>
           {furniture.length === 0 && <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"><p className="text-sm font-semibold text-slate-100">{building ? 'Mengambil furniture asli dari Habbo Asset Library…' : 'Kanvas kantor belum terisi'}</p><p className="mt-1 max-w-xs text-xs text-slate-400">{buildError || 'Kantor sedang disusun menggunakan aset Habbo.'}</p><a href="/assets" className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white">Buka Habbo Asset Library</a></div>}
           {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.id || item.classname} data-furniture-id={item.id || item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>{setSelected(item.id || item.classname);setStatePlaying(false)}} aria-label={"Pindahkan "+item.name} className={`absolute flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===(item.id || item.classname)?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:((item.x??(20+(i%4)*20))/40)+"%",top:((item.y??(25+Math.floor(i/4)*22))/40)+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={furnitureImage(item)} alt={item.name} draggable={false} onError={e=>{const img=e.currentTarget;if(img.src!==fallbackFurnitureImage(item))img.src=fallbackFurnitureImage(item)}} className="pointer-events-none h-[78%] w-full object-contain"/>{selected===(item.id || item.classname)&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Putar furniture" title="Putar 45 derajat" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();updateSelected({direction:((item.direction ?? 2)+1)%8})}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><RotateCw size={14}/></button><button type="button" aria-label="Perkecil furniture" title="Perkecil furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,-16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomOut size={14}/></button><button type="button" aria-label="Perbesar furniture" title="Perbesar furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomIn size={14}/></button><button type="button" aria-label="Salin furniture" title="Gandakan furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const copyId=(globalThis.crypto?.randomUUID?.() || `copy-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);const duplicate:PlacedFurniture={...item,id:copyId,x:Math.min(96,(item.x??50)+5),y:Math.min(96,(item.y??50)+5)};saveFurniture([...furniture,duplicate]);setSelected(copyId);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-700"><Copy size={14}/></button><button type="button" aria-label="Hapus furniture" title="Hapus furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();saveFurniture(furniture.filter(x=>(x.id || x.classname)!==(item.id || item.classname)));setSelected(null);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-700"><Trash2 size={14}/></button>{(item.states ?? 1)>1&&<><button type="button" data-resize-control aria-label="Ganti state furniture" title={(item.states ?? 1)===2?((item.state ?? 0)===0?"Nyalakan":"Matikan"):"Ganti state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const total=item.states??1;updateSelected({state:((item.state??0)+1)%total});setStatePlaying(false)}} className={`flex h-7 items-center justify-center gap-1 rounded-full px-2 text-[10px] font-bold ${(item.state??0)>0?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}><Lightbulb size={14}/>{(item.states??1)===2?((item.state??0)===0?"OFF":"ON"):`S${item.state??0}`}</button><button type="button" data-resize-control aria-label={statePlaying?"Hentikan animasi state":"Jalankan animasi state"} title={statePlaying?"Hentikan animasi":"Putar animasi state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const nextState=statePlaying?0:1;updateSelected({state:nextState});setStatePlaying(!statePlaying)}} className={`flex h-7 w-7 items-center justify-center rounded-full ${statePlaying?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}>{statePlaying?<Pause size={14}/>:<Play size={14}/>}</button></>}</div>}</div>})}
+          <div className="pointer-events-none absolute rounded-2xl border-4 border-emerald-800/70 bg-emerald-700 px-8 py-4 text-center text-white shadow-xl" style={{left:"25%",top:"2%"}}>
+            <p className="text-3xl font-black tracking-widest">GRAB AI COMPANY</p><p className="text-sm font-semibold tracking-[.35em]">HABBO OFFICE · TEAM HQ</p>
+          </div>
+          {[
+            {label:"RESEARCH · ANDI",x:18,y:17},{label:"DATA · DIMAS",x:39,y:17},{label:"MARKETING · SINTA",x:60,y:17},{label:"MENU · OKTA",x:81,y:17},
+            {label:"DESIGN · EKO",x:18,y:46},{label:"CONTENT · INDAH",x:39,y:46},{label:"CUSTOMER · WAHYU",x:60,y:46},{label:"OPERATIONS · JOKO",x:81,y:46},
+            {label:"RECEPTION",x:12,y:75},{label:"MEETING ROOM",x:48,y:75},{label:"LOUNGE",x:82,y:75},
+          ].map(zone=><div key={zone.label} className="absolute -translate-x-1/2 rounded-md border border-slate-700/40 bg-slate-900/85 px-3 py-1 text-xs font-bold tracking-wide text-white shadow-lg" style={{left:(zone.x/40)+"%",top:(zone.y/40)+"%"}}>{zone.label}</div>)}
         </div>
       </div>
     </Card>
