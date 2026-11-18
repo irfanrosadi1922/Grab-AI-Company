@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Trash2, Copy, UserRound, Save, Plus, Minus, ZoomIn, ZoomOut, RotateCcw, RotateCw, Play, Pause, Lightbulb } from 'lucide-react'
+import { Trash2, Copy, UserRound, Save, Plus, ZoomIn, ZoomOut, RotateCcw, RotateCw, Play, Pause, Lightbulb, Undo2, Redo2, Group, Ungroup, MousePointer2 } from 'lucide-react'
 import { Avatar, Button, Card, PageHeader } from '../components/ui'
 import { EMPLOYEES } from '../data/employees'
 import { getPlacedFurniture, type PlacedFurniture } from '../lib/officeFurniture'
@@ -28,6 +28,10 @@ const avatarUrl = (figure: string) => 'https://www.habboassets.com/imaging/avata
 export default function Office() {
   const [furniture, setFurniture] = useState<PlacedFurniture[]>([])
   const [selected, setSelected] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const undoStack = useRef<PlacedFurniture[][]>([])
+  const redoStack = useRef<PlacedFurniture[][]>([])
+  const dragSnapshot = useRef<PlacedFurniture[] | null>(null)
   const [looks, setLooks] = useState<Looks>({})
   const [agentId, setAgentId] = useState<EmployeeId>(EMPLOYEES[0].id)
   const [figure, setFigure] = useState(DEFAULT_FIGURE)
@@ -98,10 +102,45 @@ export default function Office() {
     return `https://www.habboassets.com/imaging/furniture/${encodeURIComponent(item.classname)}.png?direction=${direction}&state=${state}`
   }
   const fallbackFurnitureImage = (item: PlacedFurniture) => `https://www.habboassets.com/imaging/furniture/${encodeURIComponent(item.classname)}.png?direction=${item.direction ?? 2}&state=${item.state ?? 0}`
-  const saveFurniture = (next: PlacedFurniture[]) => {
+  const persistFurniture = (next: PlacedFurniture[]) => {
     localStorage.setItem('grab-ai-office-furniture-v2', JSON.stringify(next))
     setFurniture(next)
     window.dispatchEvent(new CustomEvent('office-furniture-updated'))
+  }
+  const saveFurniture = (next: PlacedFurniture[]) => {
+    undoStack.current = [...undoStack.current.slice(-49), furniture.map(item => ({ ...item }))]
+    redoStack.current = []
+    persistFurniture(next)
+  }
+  const undo = () => {
+    const previous = undoStack.current.pop()
+    if (!previous) return
+    redoStack.current = [...redoStack.current, furniture.map(item => ({ ...item }))]
+    persistFurniture(previous); setSelectedIds([]); setSelected(null)
+  }
+  const redo = () => {
+    const next = redoStack.current.pop()
+    if (!next) return
+    undoStack.current = [...undoStack.current, furniture.map(item => ({ ...item }))]
+    persistFurniture(next); setSelectedIds([]); setSelected(null)
+  }
+  const groupSelected = () => {
+    if (selectedIds.length < 2) return
+    const groupId = 'group-' + Date.now()
+    saveFurniture(furniture.map(item => selectedIds.includes(item.id || item.classname) ? { ...item, groupId } : item))
+  }
+  const ungroupSelected = () => {
+    const groups = new Set(furniture.filter(item => selectedIds.includes(item.id || item.classname)).map(item => item.groupId).filter(Boolean))
+    if (!groups.size) return
+    saveFurniture(furniture.map(item => groups.has(item.groupId) ? { ...item, groupId: undefined } : item))
+  }
+  const duplicateSelected = () => {
+    const chosen = furniture.filter(item => selectedIds.includes(item.id || item.classname))
+    if (!chosen.length) return
+    const copies = chosen.map(item => ({ ...item, id: 'copy-' + Date.now() + '-' + Math.random().toString(36).slice(2,8), x: Math.min(96,(item.x ?? 50)+5), y: Math.min(96,(item.y ?? 50)+5) }))
+    saveFurniture([...furniture, ...copies])
+    const ids = copies.map(item => item.id!)
+    setSelectedIds(ids); setSelected(ids[0]); setStatePlaying(false)
   }
 
   const distance = (a:{x:number;y:number},b:{x:number;y:number}) => Math.hypot(a.x-b.x,a.y-b.y)
@@ -163,9 +202,13 @@ export default function Office() {
     const el = canvas.current
     if (!el) return
     const r = e.currentTarget.getBoundingClientRect()
+    dragSnapshot.current = furniture.map(entry => ({ ...entry }))
     drag.current = { id: item.id || item.classname, pointer: e.pointerId, dx: e.clientX-r.left-r.width/2, dy: e.clientY-r.top-r.height/2 }
     el.setPointerCapture(e.pointerId)
-    setSelected(item.id || item.classname)
+    const id = item.id || item.classname
+    if (e.shiftKey) setSelectedIds(ids => ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id])
+    else if (!selectedIds.includes(id)) setSelectedIds([id])
+    setSelected(id)
     e.preventDefault()
   }
   const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -179,6 +222,7 @@ export default function Office() {
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drag.current || drag.current.pointer!==e.pointerId) return
     drag.current=null
+    if (dragSnapshot.current) { undoStack.current=[...undoStack.current.slice(-49),dragSnapshot.current]; redoStack.current=[]; dragSnapshot.current=null }
     setFurniture(current=>{ localStorage.setItem('grab-ai-office-furniture-v2',JSON.stringify(current)); return current })
   }
   const resizeItem = (id: string, delta: number) => {
@@ -192,7 +236,7 @@ export default function Office() {
 
   return <div className="space-y-4">
     <PageHeader title="Kantor" desc="Susun kantor menggunakan furniture asli dari Habbo Asset Library." />
-    <div className="flex flex-wrap justify-end gap-2"><Button icon={Trash2} onClick={() => { if (window.confirm("Hapus semua furniture dari kanvas?")) { saveFurniture([]); setSelected(null) } }} disabled={!furniture.length}>Kosongkan kanvas</Button><a href="/assets" className="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas"><Plus size={16}/> Tambah furniture dari Asset Library</a></div>
+    <div className="flex flex-wrap justify-end gap-2"><Button icon={Undo2} variant="outline" onClick={undo} disabled={!undoStack.current.length}>Undo</Button><Button icon={Redo2} variant="outline" onClick={redo} disabled={!redoStack.current.length}>Redo</Button><Button icon={MousePointer2} variant="outline" onClick={()=>{setSelected(null);setSelectedIds([])}}>Select</Button><Button icon={Group} variant="outline" onClick={groupSelected} disabled={selectedIds.length<2}>Group</Button><Button icon={Ungroup} variant="outline" onClick={ungroupSelected} disabled={!selectedIds.length}>Ungroup</Button><Button icon={Copy} variant="outline" onClick={duplicateSelected} disabled={!selectedIds.length}>Salin</Button><Button icon={Trash2} onClick={() => { if (window.confirm("Hapus semua furniture dari kanvas?")) { saveFurniture([]); setSelected(null) } }} disabled={!furniture.length}>Kosongkan kanvas</Button><a href="/assets" className="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-semibold text-canvas"><Plus size={16}/> Tambah furniture dari Asset Library</a></div>
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div><p className="text-sm font-semibold">Kanvas kantor</p><p className="text-xs text-mute">{furniture.length} furniture Habbo · geser area kosong untuk menggeser kanvas, geser objek untuk memindahkannya</p></div>
@@ -202,7 +246,7 @@ export default function Office() {
       <div ref={canvas} onPointerDown={handleCanvasPointerDown} onPointerMove={handleCanvasPointerMove} onPointerUp={handleCanvasPointerUp} onPointerCancel={handleCanvasPointerUp} className="relative h-[72dvh] overflow-auto bg-white" style={{backgroundColor:"#ffffff",touchAction:'none'}}>
         <div className="relative origin-top-left overflow-hidden bg-white" style={{width:"1800px", height:"1200px", minWidth:"1800px", transform:`scale(${zoom})`, transformOrigin:"top left", backgroundColor:"#ffffff"}}>
 
-          {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.id || item.classname} data-furniture-id={item.id || item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={()=>{setSelected(item.id || item.classname);setStatePlaying(false)}} aria-label={"Pindahkan "+item.name} className={`absolute z-[10] flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selected===(item.id || item.classname)?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:(item.x??(20+(i%4)*20))+"%",top:(item.y??(25+Math.floor(i/4)*22))+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={furnitureImage(item)} alt={item.name} draggable={false} onError={e=>{const img=e.currentTarget;if(img.src!==fallbackFurnitureImage(item))img.src=fallbackFurnitureImage(item)}} className="pointer-events-none h-[78%] w-full object-contain"/>{selected===(item.id || item.classname)&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Putar furniture" title="Putar 45 derajat" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();updateSelected({direction:((item.direction ?? 2)+1)%8})}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><RotateCw size={14}/></button><button type="button" aria-label="Perkecil furniture" title="Perkecil furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,-16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomOut size={14}/></button><button type="button" aria-label="Perbesar furniture" title="Perbesar furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomIn size={14}/></button><button type="button" aria-label="Salin furniture" title="Gandakan furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const copyId=(globalThis.crypto?.randomUUID?.() || `copy-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);const duplicate:PlacedFurniture={...item,id:copyId,x:Math.min(96,(item.x??50)+5),y:Math.min(96,(item.y??50)+5)};saveFurniture([...furniture,duplicate]);setSelected(copyId);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-700"><Copy size={14}/></button><button type="button" aria-label="Hapus furniture" title="Hapus furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();saveFurniture(furniture.filter(x=>(x.id || x.classname)!==(item.id || item.classname)));setSelected(null);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-700"><Trash2 size={14}/></button>{(item.states ?? 1)>1&&<><button type="button" data-resize-control aria-label="Ganti state furniture" title={(item.states ?? 1)===2?((item.state ?? 0)===0?"Nyalakan":"Matikan"):"Ganti state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const total=item.states??1;updateSelected({state:((item.state??0)+1)%total});setStatePlaying(false)}} className={`flex h-7 items-center justify-center gap-1 rounded-full px-2 text-[10px] font-bold ${(item.state??0)>0?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}><Lightbulb size={14}/>{(item.states??1)===2?((item.state??0)===0?"OFF":"ON"):`S${item.state??0}`}</button><button type="button" data-resize-control aria-label={statePlaying?"Hentikan animasi state":"Jalankan animasi state"} title={statePlaying?"Hentikan animasi":"Putar animasi state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const nextState=statePlaying?0:1;updateSelected({state:nextState});setStatePlaying(!statePlaying)}} className={`flex h-7 w-7 items-center justify-center rounded-full ${statePlaying?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}>{statePlaying?<Pause size={14}/>:<Play size={14}/>}</button></>}</div>}</div>})}
+          {furniture.map((item,i)=>{const size=item.size??112;return <div key={item.id || item.classname} data-furniture-id={item.id || item.classname} onPointerDown={e=>startDrag(e,item)} role="button" tabIndex={0} onClick={(e)=>{const id=item.id || item.classname;if(e.shiftKey)setSelectedIds(ids=>ids.includes(id)?ids.filter(value=>value!==id):[...ids,id]);else setSelectedIds([id]);setSelected(id);setStatePlaying(false)}} aria-label={"Pindahkan "+item.name} className={`absolute z-[10] flex flex-col items-center justify-center rounded-xl border p-2 text-center shadow-sm select-none ${selectedIds.includes(item.id || item.classname)?"z-10 border-brand bg-brand/10 ring-2 ring-brand/30":"border-transparent bg-transparent"}`} style={{left:(item.x??(20+(i%4)*20))+"%",top:(item.y??(25+Math.floor(i/4)*22))+"%",width:size,height:size,touchAction:"none",transform:"translate(-50%,-50%)"}}><img src={furnitureImage(item)} alt={item.name} draggable={false} onError={e=>{const img=e.currentTarget;if(img.src!==fallbackFurnitureImage(item))img.src=fallbackFurnitureImage(item)}} className="pointer-events-none h-[78%] w-full object-contain"/>{selectedIds.includes(item.id || item.classname)&&<div data-resize-control className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-white p-1 shadow"><button type="button" aria-label="Putar furniture" title="Putar 45 derajat" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();updateSelected({direction:((item.direction ?? 2)+1)%8})}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><RotateCw size={14}/></button><button type="button" aria-label="Perkecil furniture" title="Perkecil furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,-16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomOut size={14}/></button><button type="button" aria-label="Perbesar furniture" title="Perbesar furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();resizeItem(item.id || item.classname,16)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-800"><ZoomIn size={14}/></button><button type="button" aria-label="Salin furniture" title="Gandakan furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const copyId=(globalThis.crypto?.randomUUID?.() || `copy-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);const duplicate:PlacedFurniture={...item,id:copyId,x:Math.min(96,(item.x??50)+5),y:Math.min(96,(item.y??50)+5)};saveFurniture([...furniture,duplicate]);setSelected(copyId);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-700"><Copy size={14}/></button><button type="button" aria-label="Hapus furniture" title="Hapus furniture" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();saveFurniture(furniture.filter(x=>(x.id || x.classname)!==(item.id || item.classname)));setSelected(null);setStatePlaying(false)}} className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-red-700"><Trash2 size={14}/></button>{(item.states ?? 1)>1&&<><button type="button" data-resize-control aria-label="Ganti state furniture" title={(item.states ?? 1)===2?((item.state ?? 0)===0?"Nyalakan":"Matikan"):"Ganti state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const total=item.states??1;updateSelected({state:((item.state??0)+1)%total});setStatePlaying(false)}} className={`flex h-7 items-center justify-center gap-1 rounded-full px-2 text-[10px] font-bold ${(item.state??0)>0?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}><Lightbulb size={14}/>{(item.states??1)===2?((item.state??0)===0?"OFF":"ON"):`S${item.state??0}`}</button><button type="button" data-resize-control aria-label={statePlaying?"Hentikan animasi state":"Jalankan animasi state"} title={statePlaying?"Hentikan animasi":"Putar animasi state"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();const nextState=statePlaying?0:1;updateSelected({state:nextState});setStatePlaying(!statePlaying)}} className={`flex h-7 w-7 items-center justify-center rounded-full ${statePlaying?"bg-amber-300 text-amber-950":"bg-gray-100 text-gray-800"}`}>{statePlaying?<Pause size={14}/>:<Play size={14}/>}</button></>}</div>}</div>})}
           
 
         </div>
