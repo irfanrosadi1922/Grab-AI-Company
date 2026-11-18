@@ -74,9 +74,15 @@ export default function Office() {
       setBuilding(true); setBuildError('')
       try {
         const terms = ['desk', 'chair', 'computer', 'table', 'plant', 'sofa', 'partition']
-        const responses = await Promise.all(terms.map(search => client.functions.invoke('habbo-assets', {
-          body: { action: 'list', search, page: 1, perPage: 30, hotelId: 1 },
-        })))
+        const responses = await Promise.all(terms.map(search => Promise.race([
+          client.functions.invoke('habbo-assets', {
+            body: { action: 'list', search, page: 1, perPage: 30, hotelId: 1 },
+          }),
+          new Promise<never>((_, reject) => window.setTimeout(
+            () => reject(new Error('Permintaan HabboAssets melewati batas 35 detik. Periksa koneksi atau API token.')),
+            35000,
+          )),
+        ])))
         if (cancelled) return
         const pools: HabboFurniture[][] = responses.map(response => {
           if (response.error) throw new Error(response.error.message)
@@ -150,9 +156,15 @@ export default function Office() {
     setBuilding(true); setBuildError('')
     try {
       const terms = ['desk', 'chair', 'computer', 'meeting table', 'plant', 'sofa', 'partition']
-      const responses = await Promise.all(terms.map(search => client.functions.invoke('habbo-assets', {
-        body: { action: 'list', search, page: 1, perPage: 40, hotelId: 1 },
-      })))
+      const responses = await Promise.all(terms.map(search => Promise.race([
+        client.functions.invoke('habbo-assets', {
+          body: { action: 'list', search, page: 1, perPage: 40, hotelId: 1 },
+        }),
+        new Promise<never>((_, reject) => window.setTimeout(
+          () => reject(new Error('Permintaan HabboAssets melewati batas 35 detik. Periksa koneksi atau API token.')),
+          35000,
+        )),
+      ])))
       const pools: HabboFurniture[][] = responses.map(response => {
         if (response.error) throw new Error(response.error.message || 'Gagal mengambil katalog HabboAssets.')
         const payload = response.data?.data
