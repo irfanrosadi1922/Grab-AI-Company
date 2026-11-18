@@ -42,49 +42,46 @@ Deno.serve(async (req: Request) => {
       return json({ data: await response.json(), action, classname })
     } catch { return json({ error: 'upstream_unavailable' }, 504) }
   }
-  const token = Deno.env.get('HABBOASSETS_API_KEY')
-  if (!token) return json({ error: 'habboassets_not_configured' }, 503)
-  const hotel = Math.min(100, Math.max(1, Number(body.hotelId) || 1))
-  const params = new URLSearchParams()
+
+  // HabboAssets' public legacy furniture catalogue does not require an API token.
+  // The public Imager also serves the original Habbo furniture renders directly.
   const search = typeof body.search === 'string' ? body.search.trim().slice(0, 100) : ''
-  if (search) params.set('search', search)
-  const category = typeof body.category === 'string' ? body.category.trim().slice(0, 60) : ''
-  if (category) params.set('category', category)
-
-  let endpoint = '/furniture'
-  if (action === 'categories') endpoint = '/furniture/categories'
-  else if (action === 'types') endpoint = '/furniture/types'
-  else if (action === 'detail') {
-    const classname = typeof body.classname === 'string' ? body.classname : ''
-    if (!/^[a-zA-Z0-9_*.-]{1,120}$/.test(classname)) return json({ error: 'invalid_classname' }, 400)
-    endpoint = `/furniture/${encodeURIComponent(classname)}`
-  } else if (action !== 'list') return json({ error: 'invalid_action' }, 400)
-
   if (action === 'list') {
     const page = Math.max(1, Math.min(10000, Number(body.page) || 1))
     const perPage = Math.max(1, Math.min(60, Number(body.perPage) || 24))
-    params.set('page', String(page))
-    params.set('per_page', String(perPage))
-    params.set('sort', 'name')
+    const params = new URLSearchParams({ limit: String(perPage), offset: String((page - 1) * perPage), order: 'asc' })
+    if (search) params.set('term', search)
+    try {
+      const upstream = await fetch(`https://www.habboassets.com/api/v1/furniture?${params.toString()}`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(20000),
+      })
+      const raw = await upstream.text()
+      if (!upstream.ok) return json({ error: 'habboassets_error', status: upstream.status, message: raw.slice(0, 240) }, 502)
+      let payload: unknown
+      try { payload = JSON.parse(raw) } catch { return json({ error: 'invalid_upstream_response' }, 502) }
+      const rows = Array.isArray(payload) ? payload
+        : payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown }).data)
+          ? (payload as { data: unknown[] }).data : []
+      const meta = payload && typeof payload === 'object' ? (payload as { meta?: { total?: number } }).meta : undefined
+      const normalized = rows.map((row) => {
+        const item = row as Record<string, unknown>
+        const classname = String(item.classname ?? item.class_name ?? item.name ?? '')
+        return {
+          ...item,
+          classname,
+          name: String(item.name ?? item.product_name ?? classname),
+          preview: String(item.preview ?? item.image ?? (classname ? `https://www.habboassets.com/imaging/furniture/${encodeURIComponent(classname)}.png` : '')),
+        }
+      }).filter((item) => item.classname)
+      return json({ data: normalized, meta: { total: Number(meta?.total ?? normalized.length) }, action, hotelId: 1 })
+    } catch { return json({ error: 'upstream_unavailable' }, 504) }
   }
-  const url = `https://www.habboassets.com/api/v2${endpoint}${params.size ? `?${params.toString()}` : ''}`
-  try {
-    const upstream = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'X-Hotel-ID': String(hotel),
-        Accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(20000),
-    })
-    const raw = await upstream.text()
-    if (!upstream.ok) {
-      return json({ error: 'habboassets_error', status: upstream.status, message: raw.slice(0, 240) }, 502)
-    }
-    let data: unknown
-    try { data = JSON.parse(raw) } catch { return json({ error: 'invalid_upstream_response' }, 502) }
-    return json({ data, action, hotelId: hotel })
-  } catch {
-    return json({ error: 'upstream_unavailable' }, 504)
+
+  if (action === 'detail') {
+    const classname = typeof body.classname === 'string' ? body.classname : ''
+    if (!/^[a-zA-Z0-9_*.-]{1,120}$/.test(classname)) return json({ error: 'invalid_classname' }, 400)
+    return json({ data: { classname, name: classname, preview: `https://www.habboassets.com/imaging/furniture/${encodeURIComponent(classname)}.png` }, action })
   }
+  return json({ error: 'invalid_action' }, 400)
 })
